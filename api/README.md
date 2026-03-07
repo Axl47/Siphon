@@ -11,6 +11,12 @@ for local development in this fork:
 - copy [`api/.env.example`](./.env.example) to `.env`.
 - point `API_KEY_URL` at a local key file such as [`api/keys.sample.json`](./keys.sample.json).
 
+### local youtube setup
+- local YouTube downloads are expected to work with cobalt's built-in PO token generation. keep `YOUTUBE_GENERATE_PO_TOKENS` enabled for local development.
+- `YOUTUBE_SESSION_SERVER` is optional and meant for advanced or hosted setups that deliberately provide external session tokens.
+- the supported YouTube tuning envs in this fork are `YOUTUBE_GENERATE_PO_TOKENS`, `YOUTUBE_SESSION_SERVER`, `YOUTUBE_SESSION_INNERTUBE_CLIENT`, `CUSTOM_INNERTUBE_CLIENT`, and `YOUTUBE_PLAYER_ID`.
+- fork-specific envs from third-party guides such as `YOUTUBE_USE_ONESIE` are not implemented in this repo and should not be treated as part of the local setup.
+
 ## accessing the api
 there is currently no publicly available pre-hosted api.
 we recommend [deploying your own instance](../.docs/run-an-instance.md) if you wish to use the cobalt api.

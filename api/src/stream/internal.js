@@ -3,27 +3,79 @@ import { Readable } from "node:stream";
 import { closeRequest, getHeaders, pipe } from "./shared.js";
 import { handleHlsPlaylist, isHlsResponse, probeInternalHLSTunnel } from "./internal-hls.js";
 
-const CHUNK_SIZE = BigInt(8e6); // 8 MB
 const min = (a, b) => a < b ? a : b;
 
 const serviceNeedsChunks = new Set(["youtube", "vk"]);
+const defaultChunkSize = BigInt(8e6);
+const serviceChunkSizes = {
+    youtube: 1024n * 1024n,
+};
 
-async function* readChunks(streamInfo, size) {
-    let read = 0n, chunksSinceTransplant = 0;
+const getStreamHost = (url) => {
+    try {
+        return new URL(url).hostname;
+    } catch {
+        return "unknown-host";
+    }
+}
+
+const logChunkedFailure = (streamInfo, stage, detail) => {
+    console.warn(
+        new Date().toISOString(),
+        `[internal-stream:${streamInfo.service}] ${stage} failed for ${getStreamHost(streamInfo.url)}`,
+        detail
+    );
+}
+
+export const buildInternalRequestHeaders = (streamInfo, extraHeaders = {}) => ({
+    ...Object.fromEntries(streamInfo.headers || []),
+    ...getHeaders(streamInfo.service),
+    ...extraHeaders,
+    host: undefined,
+});
+
+export const sanitizeInternalHeaders = (streamInfo) => {
+    if (streamInfo.headers) {
+        streamInfo.headers.delete('icy-metadata');
+        streamInfo.headers.delete('range');
+    }
+}
+
+const getChunkSize = (streamInfo) => serviceChunkSizes[streamInfo.service] || defaultChunkSize;
+
+const getContentRangeSize = (headers) => {
+    const contentRange = headers["content-range"];
+    if (typeof contentRange !== "string") {
+        return;
+    }
+
+    const match = /bytes \d+-\d+\/(\d+)/.exec(contentRange);
+    if (!match?.[1]) {
+        return;
+    }
+
+    return BigInt(match[1]);
+}
+
+const requestChunk = async (streamInfo, start, end) => request(streamInfo.url, {
+    headers: buildInternalRequestHeaders(streamInfo, {
+        Range: `bytes=${start}-${end}`
+    }),
+    dispatcher: streamInfo.dispatcher,
+    signal: streamInfo.controller.signal,
+    maxRedirections: 4
+});
+
+async function* readChunks(streamInfo, size, read = 0n) {
+    let chunksSinceTransplant = 0;
+    const chunkSize = getChunkSize(streamInfo);
     while (read < size) {
         if (streamInfo.controller.signal.aborted) {
             throw new Error("controller aborted");
         }
 
-        const chunk = await request(streamInfo.url, {
-            headers: {
-                ...getHeaders(streamInfo.service),
-                Range: `bytes=${read}-${read + CHUNK_SIZE}`
-            },
-            dispatcher: streamInfo.dispatcher,
-            signal: streamInfo.controller.signal,
-            maxRedirections: 4
-        });
+        const chunkEnd = min(read + chunkSize - 1n, size - 1n);
+        const chunk = await requestChunk(streamInfo, read, chunkEnd);
 
         if (chunk.statusCode === 403 && chunksSinceTransplant >= 3 && streamInfo.transplant) {
             chunksSinceTransplant = 0;
@@ -35,11 +87,29 @@ async function* readChunks(streamInfo, size) {
 
         chunksSinceTransplant++;
 
-        const expected = min(CHUNK_SIZE, size - read);
+        if (chunk.statusCode < 200 || chunk.statusCode > 299) {
+            logChunkedFailure(streamInfo, "range-request", `status ${chunk.statusCode}`);
+            closeRequest(streamInfo.controller);
+            return;
+        }
+
+        if (!chunk.headers['content-length']) {
+            logChunkedFailure(streamInfo, "range-request", "missing content-length");
+            closeRequest(streamInfo.controller);
+            return;
+        }
+
+        const expected = min(chunkSize, size - read);
         const received = BigInt(chunk.headers['content-length']);
 
         if (received < expected / 2n) {
+            logChunkedFailure(
+                streamInfo,
+                "range-request",
+                `short chunk ${received.toString()} of expected ${expected.toString()}`
+            );
             closeRequest(streamInfo.controller);
+            return;
         }
 
         for await (const data of chunk.body) {
@@ -57,15 +127,9 @@ async function handleChunkedStream(streamInfo, res) {
     try {
         let req, attempts = 3;
         while (attempts--) {
-            req = await fetch(streamInfo.url, {
-                headers: getHeaders(streamInfo.service),
-                method: 'HEAD',
-                dispatcher: streamInfo.dispatcher,
-                signal
-            });
+            req = await requestChunk(streamInfo, 0n, 1n);
 
-            streamInfo.url = req.url;
-            if (req.status === 403 && streamInfo.transplant) {
+            if (req.statusCode === 403 && streamInfo.transplant) {
                 try {
                     await streamInfo.transplant(streamInfo.dispatcher);
                 } catch {
@@ -74,14 +138,28 @@ async function handleChunkedStream(streamInfo, res) {
             } else break;
         }
 
-        const size = BigInt(req.headers.get('content-length'));
+        const firstChunkSize = req.headers['content-length']
+            ? BigInt(req.headers['content-length'])
+            : 0n;
+        const size = getContentRangeSize(req.headers) || firstChunkSize;
 
-        if (req.status !== 200 || !size) {
+        if ((req.statusCode < 200 || req.statusCode > 299) || !size || !firstChunkSize) {
+            logChunkedFailure(
+                streamInfo,
+                "initial-range-request",
+                `status ${req.statusCode}, content-length ${req.headers['content-length'] ?? 'missing'}, content-range ${req.headers['content-range'] ?? 'missing'}`
+            );
             globalThis.FORCE_RESET_INNERTUBE_PLAYER = true;
             return cleanup();
         }
 
-        const generator = readChunks(streamInfo, size);
+        const generator = async function* () {
+            for await (const data of req.body) {
+                yield data;
+            }
+
+            yield* readChunks(streamInfo, size, firstChunkSize);
+        }();
 
         const abortGenerator = () => {
             generator.return();
@@ -92,10 +170,10 @@ async function handleChunkedStream(streamInfo, res) {
 
         const stream = Readable.from(generator);
 
-        for (const headerName of ['content-type', 'content-length']) {
-            const headerValue = req.headers.get(headerName);
-            if (headerValue) res.setHeader(headerName, headerValue);
+        if (req.headers['content-type']) {
+            res.setHeader('content-type', req.headers['content-type']);
         }
+        res.setHeader('content-length', size.toString());
 
         pipe(stream, res, cleanup);
     } catch {
@@ -109,11 +187,7 @@ async function handleGenericStream(streamInfo, res) {
 
     try {
         const fileResponse = await request(streamInfo.url, {
-            headers: {
-                ...Object.fromEntries(streamInfo.headers),
-                ...getHeaders(streamInfo.service),
-                host: undefined
-            },
+            headers: buildInternalRequestHeaders(streamInfo),
             dispatcher: streamInfo.dispatcher,
             signal,
             maxRedirections: 16
@@ -147,9 +221,7 @@ async function handleGenericStream(streamInfo, res) {
 }
 
 export function internalStream(streamInfo, res) {
-    if (streamInfo.headers) {
-        streamInfo.headers.delete('icy-metadata');
-    }
+    sanitizeInternalHeaders(streamInfo);
 
     if (serviceNeedsChunks.has(streamInfo.service) && !streamInfo.isHLS) {
         return handleChunkedStream(streamInfo, res);
@@ -161,12 +233,7 @@ export function internalStream(streamInfo, res) {
 export async function probeInternalTunnel(streamInfo) {
     try {
         const signal = AbortSignal.timeout(3000);
-        const headers = {
-            ...Object.fromEntries(streamInfo.headers || []),
-            ...getHeaders(streamInfo.service),
-            host: undefined,
-            range: undefined
-        };
+        const headers = buildInternalRequestHeaders(streamInfo, { range: undefined });
 
         if (streamInfo.isHLS) {
             return probeInternalHLSTunnel({
