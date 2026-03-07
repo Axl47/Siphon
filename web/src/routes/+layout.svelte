@@ -22,10 +22,8 @@
     import { device, app } from "$lib/device";
     import { getServerInfo } from "$lib/api/server-info";
     import currentTheme, { statusBarColors } from "$lib/state/theme";
-    import { turnstileCreated, turnstileEnabled } from "$lib/state/turnstile";
 
     import Sidebar from "$components/sidebar/Sidebar.svelte";
-    import Turnstile from "$components/misc/Turnstile.svelte";
     import NotchSticker from "$components/misc/NotchSticker.svelte";
     import DialogHolder from "$components/dialog/DialogHolder.svelte";
     import ProcessingQueue from "$components/queue/ProcessingQueue.svelte";
@@ -39,7 +37,6 @@
         device.prefers.reducedTransparency;
 
     $: preloadAssets = false;
-    $: plausibleLoaded = false;
 
     afterNavigate(async () => {
         const to_focus: HTMLElement | null =
@@ -63,7 +60,7 @@
     {#if env.HOST}
         <meta
             property="og:url"
-            content="https://{env.HOST}{$page.url.pathname}"
+            content={`https://${env.HOST}${$page.url.pathname}`}
         />
     {/if}
 
@@ -79,16 +76,6 @@
         />
     {/if}
 
-    {#if plausibleLoaded || (browser && env.PLAUSIBLE_ENABLED && !$settings.privacy.disableAnalytics)}
-        <script
-            defer
-            data-domain={env.HOST}
-            on:load={() => {
-                plausibleLoaded = true;
-            }}
-            src="https://{env.PLAUSIBLE_HOST}/js/script.js"
-        ></script>
-    {/if}
 </svelte:head>
 
 <div
@@ -118,9 +105,6 @@
         {/if}
         <ProcessingQueue />
         <div id="content">
-            {#if ($turnstileEnabled && $page.url.pathname === "/") || $turnstileCreated}
-                <Turnstile />
-            {/if}
             <slot></slot>
         </div>
     </div>

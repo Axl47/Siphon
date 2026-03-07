@@ -131,16 +131,16 @@
     "advanced.debug.title": "enable features for nerds",
     "advanced.debug.description": "gives you easy access to app info that can be useful for debugging. enabling this does not affect functionality of cobalt in any way.",
 
-    "processing.community": "community instances",
-    "processing.enable_custom.title": "use a custom processing server",
-    "processing.enable_custom.description": "cobalt will use a custom processing instance if you choose to. even though cobalt has some security measures in place, we are not responsible for any damages done via a community instance, as we have no control over them.\n\nplease be mindful of what instances you use and make sure they're hosted by people you trust.",
+    "processing.community": "processing instance",
+    "processing.enable_custom.title": "instance url",
+    "processing.enable_custom.description": "siphon talks to your self-hosted cobalt deployment. enter the base url for the instance you want to use here.",
 
     "processing.access_key": "instance access key",
-    "processing.access_key.title": "use an instance access key",
-    "processing.access_key.description": "cobalt will use this key to make requests to the processing instance instead of other authentication methods. make sure the instance supports api keys!",
+    "processing.access_key.title": "api key",
+    "processing.access_key.description": "siphon sends this UUID as an `Authorization: Api-Key` header on requests to your cobalt instance.",
 
-    "processing.custom_instance.input.alt_text": "custom instance domain",
-    "processing.access_key.input.alt_text": "u-u-i-d access key",
+    "processing.custom_instance.input.alt_text": "processing instance domain",
+    "processing.access_key.input.alt_text": "u-u-i-d api key",
 
     "advanced.settings_data": "settings data",
     "advanced.local_storage": "local storage",

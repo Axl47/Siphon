@@ -9,7 +9,6 @@
     import PageNavTab from "$components/subnav/PageNavTab.svelte";
     import PageNavSection from "$components/subnav/PageNavSection.svelte";
 
-    import IconLock from "@tabler/icons-svelte/IconLock.svelte";
     import IconSunHigh from "@tabler/icons-svelte/IconSunHigh.svelte";
     import IconAccessible from "@tabler/icons-svelte/IconAccessible.svelte";
 
@@ -87,12 +86,6 @@
         </PageNavSection>
 
         <PageNavSection>
-            <PageNavTab
-                path="/settings/privacy"
-                title={$t("settings.page.privacy")}
-                icon={IconLock}
-                iconColor="gray"
-            />
             <PageNavTab
                 path="/settings/advanced"
                 title={$t("settings.page.advanced")}

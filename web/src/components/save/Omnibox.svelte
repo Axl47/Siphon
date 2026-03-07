@@ -1,6 +1,4 @@
 <script lang="ts">
-    import env, { officialApiURL } from "$lib/env";
-
     import { tick } from "svelte";
     import { page } from "$app/state";
     import { goto } from "$app/navigation";
@@ -14,7 +12,6 @@
     import { updateSetting } from "$lib/state/settings";
     import { savingHandler } from "$lib/api/saving-handler";
     import { pasteLinkFromClipboard } from "$lib/clipboard";
-    import { turnstileEnabled, turnstileSolved } from "$lib/state/turnstile";
 
     import type { Optional } from "$lib/types/generic";
     import type { DownloadModeOption } from "$lib/types/settings";
@@ -25,7 +22,6 @@
     import Switcher from "$components/buttons/Switcher.svelte";
     import OmniboxIcon from "$components/save/OmniboxIcon.svelte";
     import ActionButton from "$components/buttons/ActionButton.svelte";
-    import CaptchaTooltip from "$components/save/CaptchaTooltip.svelte";
     import SettingsButton from "$components/buttons/SettingsButton.svelte";
 
     import IconMute from "$components/icons/Mute.svelte";
@@ -46,8 +42,6 @@
     let isLoading = $state(false);
 
     let isHovered = $state(false);
-
-    let isBotCheckOngoing = $derived($turnstileEnabled && !$turnstileSolved);
 
     let linkPrefill = $derived(
         page.url.hash.replace("#", "")
@@ -143,30 +137,14 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<!--
-    if you want to remove the community instance label,
-    refer to the license first https://github.com/imputnet/cobalt/tree/main/web#license
--->
-{#if env.DEFAULT_API !== officialApiURL}
-    <div id="instance-label">
-        {$t("save.label.community_instance")}
-    </div>
-{/if}
-
 <div id="omnibox">
-    {#if $turnstileEnabled}
-        <CaptchaTooltip
-            visible={isBotCheckOngoing && (isHovered || isFocused)}
-        />
-    {/if}
-
     <div
         id="input-container"
         class:focused={isFocused}
         class:downloadable
         class:clear-visible={clearVisible}
     >
-        <OmniboxIcon loading={isLoading || isBotCheckOngoing} />
+        <OmniboxIcon loading={isLoading} />
 
         <input
             id="link-area"
@@ -182,9 +160,7 @@
             autocapitalize="off"
             maxlength="512"
             placeholder={$t("save.input.placeholder")}
-            aria-label={isBotCheckOngoing
-                ? $t("a11y.save.link_area.turnstile")
-                : $t("a11y.save.link_area")}
+            aria-label={$t("a11y.save.link_area")}
             data-form-type="other"
             disabled={isDisabled}
         />
@@ -351,12 +327,6 @@
 
     #paste-mobile-text {
         display: none;
-    }
-
-    #instance-label {
-        font-size: 13px;
-        color: var(--gray);
-        font-weight: 500;
     }
 
     @media screen and (max-width: 440px) {

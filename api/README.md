@@ -2,14 +2,20 @@
 this directory includes the source code for cobalt api. it's made with [express.js](https://www.npmjs.com/package/express) and love!
 
 ## running your own instance
-if you want to run your own instance for whatever purpose, [follow this guide](/docs/run-an-instance.md).
+if you want to run your own instance for whatever purpose, [follow this guide](../.docs/run-an-instance.md).
 we recommend to use docker compose unless you intend to run cobalt for developing/debugging purposes.
+
+for local development in this fork:
+- use node `20.x` and pnpm `9.x`.
+- enable pnpm with `corepack enable && corepack prepare pnpm@9.6.0 --activate`.
+- copy [`api/.env.example`](./.env.example) to `.env`.
+- point `API_KEY_URL` at a local key file such as [`api/keys.sample.json`](./keys.sample.json).
 
 ## accessing the api
 there is currently no publicly available pre-hosted api.
-we recommend [deploying your own instance](/docs/run-an-instance.md) if you wish to use the cobalt api.
+we recommend [deploying your own instance](../.docs/run-an-instance.md) if you wish to use the cobalt api.
 
-you can read [the api documentation here](/docs/api.md).
+you can read [the api documentation here](../.docs/api.md).
 
 ## supported services
 this list is not final and keeps expanding over time!

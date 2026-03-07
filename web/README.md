@@ -1,5 +1,5 @@
-# cobalt web
-the cobalt frontend is a static web app built with
+# siphon web
+the siphon frontend is a static web app built with
 [sveltekit](https://kit.svelte.dev/) + [vite](https://vitejs.dev/).
 
 ## configuring
@@ -10,17 +10,14 @@ the cobalt frontend is a static web app built with
 the frontend has several build-time environment variables for configuring various features. to use
 them, you must specify them when building the frontend (or running a vite server for development).
 
-`WEB_DEFAULT_API` is **required** to run cobalt frontend.
+`SIPHON_DEFAULT_API_URL` is **required** to run siphon frontend.
 
 | name                            | example                     | description                                                                                             |
 |:--------------------------------|:----------------------------|:--------------------------------------------------------------------------------------------------------|
-| `WEB_HOST`                      | `cobalt.tools`              | domain on which the frontend will be running. used for meta tags and configuring plausible.             |
-| `WEB_PLAUSIBLE_HOST`            | `plausible.io`*             | enables plausible analytics with provided hostname as receiver backend.                                 |
-| `WEB_DEFAULT_API`               | `https://api.cobalt.tools/` | changes url which is used for api requests by frontend clients.                                         |
-| `ENABLE_DEPRECATED_YOUTUBE_HLS` | `true`                      | enables the youtube HLS settings entry; allows sending the related variable to the processing instance. |
-
-\* don't use plausible.io as receiver backend unless you paid for their cloud service.
-   use your own domain when hosting community edition of plausible. refer to their [docs](https://plausible.io/docs) when needed.
+| `SIPHON_HOST`                   | `siphon.local`              | optional domain on which the frontend will be running. used for meta tags and sitemap generation.       |
+| `SIPHON_DEFAULT_API_URL`        | `https://siphon.example/`   | default cobalt instance url used for frontend clients.                                                   |
+| `SIPHON_ENABLE_DEPRECATED_YOUTUBE_HLS` | `true`               | enables the youtube HLS settings entry; allows sending the related variable to the processing instance. |
+| `SIPHON_ENABLE_WEBCODECS`       | `true`                      | exposes the experimental WebCodecs toggle for local processing.                                         |
 
 ## link prefill
 to prefill the link into the input box & start the download automatically, you can pass the URL in the `#` parameter, like this:
@@ -33,8 +30,13 @@ the link can also be URI-encoded, like this:
 https://cobalt.tools/#https%3A//www.youtube.com/watch%3Fv=dQw4w9WgXcQ
 ```
 
+## local development
+- use node `20.x` and pnpm `9.x`.
+- enable pnpm with `corepack enable && corepack prepare pnpm@9.6.0 --activate`.
+- copy `.env.example` to `.env` if you want vite to load the variables locally.
+
 ## license
-cobalt web code is licensed under [CC-BY-NC-SA-4.0](LICENSE).
+upstream cobalt web code is licensed under [CC-BY-NC-SA-4.0](LICENSE).
 
 this license allows you to:
 - copy and redistribute the code in any medium or format, and
@@ -50,7 +52,7 @@ cobalt branding, mascots, and other related assets included in the repo are ***c
 
 you are allowed to host an ***unmodified*** instance of cobalt with branding for **non-commercial purposes**, but this ***does not*** give you permission to use the branding anywhere else, or make derivatives of it in any way.
 
-when making an alternative version of the project, please replace or remove all branding (including the name).
+this fork is in the process of replacing upstream branding and product configuration with siphon-specific equivalents.
 
 ## open source acknowledgments
 ### svelte + sveltekit

@@ -6,6 +6,7 @@ import type {
     CobaltSettingsV4,
     CobaltSettingsV5,
     CobaltSettingsV6,
+    CobaltSettingsV7,
 } from "$lib/types/settings";
 import { getBrowserLanguage } from "$lib/settings/audio-sub-language";
 
@@ -29,14 +30,15 @@ const migrations: Record<number, Migrator> = {
 
     [4]: (settings: AllPartialSettingsWithSchema) => {
         const out = settings as RecursivePartial<CobaltSettingsV4>;
+        const legacy = settings as RecursivePartial<CobaltSettingsV4>;
         out.schemaVersion = 4;
 
-        if (settings?.processing) {
-            if ("allowDefaultOverride" in settings.processing) {
-                delete settings.processing.allowDefaultOverride;
+        if (legacy.processing) {
+            if ("allowDefaultOverride" in legacy.processing) {
+                delete legacy.processing.allowDefaultOverride;
             }
-            if ("seenOverrideWarning" in settings.processing) {
-                delete settings.processing.seenOverrideWarning;
+            if ("seenOverrideWarning" in legacy.processing) {
+                delete legacy.processing.seenOverrideWarning;
             }
         }
 
@@ -45,6 +47,7 @@ const migrations: Record<number, Migrator> = {
 
     [5]: (settings: AllPartialSettingsWithSchema) => {
         const out = settings as RecursivePartial<CobaltSettingsV5>;
+        const legacy = settings as RecursivePartial<CobaltSettingsV5>;
         out.schemaVersion = 5;
 
         if (settings?.save) {
@@ -58,11 +61,11 @@ const migrations: Record<number, Migrator> = {
             }
         }
 
-        if (settings?.privacy) {
-            if ("alwaysProxy" in settings.privacy) {
+        if (legacy.privacy) {
+            if ("alwaysProxy" in legacy.privacy) {
                 out.save ??= {};
-                out.save.alwaysProxy = settings.privacy.alwaysProxy;
-                delete settings.privacy.alwaysProxy;
+                out.save.alwaysProxy = !!legacy.privacy.alwaysProxy;
+                delete legacy.privacy.alwaysProxy;
             }
         }
 
@@ -91,6 +94,38 @@ const migrations: Record<number, Migrator> = {
                 out.save!.localProcessing =
                     settings.save.localProcessing ? "preferred" : "disabled";
             }
+        }
+
+        return out as AllPartialSettingsWithSchema;
+    },
+
+    [7]: (settings: AllPartialSettingsWithSchema) => {
+        const out = settings as RecursivePartial<CobaltSettingsV7>;
+        const legacy = settings as RecursivePartial<CobaltSettingsV4>;
+        out.schemaVersion = 7;
+
+        out.connection ??= {};
+
+        if (legacy.processing) {
+            if (
+                legacy.processing.enableCustomInstances
+                && typeof legacy.processing.customInstanceURL === "string"
+            ) {
+                out.connection.instanceUrl = legacy.processing.customInstanceURL;
+            }
+
+            if (
+                legacy.processing.enableCustomApiKey
+                && typeof legacy.processing.customApiKey === "string"
+            ) {
+                out.connection.apiKey = legacy.processing.customApiKey;
+            }
+
+            delete legacy.processing;
+        }
+
+        if (legacy.privacy) {
+            delete legacy.privacy;
         }
 
         return out as AllPartialSettingsWithSchema;

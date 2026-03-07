@@ -65,11 +65,11 @@ const enableCOEP: PluginOption = {
 const generateSitemap: PluginOption = {
     name: "generate-sitemap",
     async writeBundle(bundle) {
-        if (!process.env.WEB_HOST || !bundle.dir?.endsWith('server')) {
+        if (!process.env.SIPHON_HOST || !bundle.dir?.endsWith('server')) {
             return;
         }
 
-        await createSitemap(`https://${process.env.WEB_HOST}`, {
+        await createSitemap(`https://${process.env.SIPHON_HOST}`, {
             changeFreq: 'monthly',
             outDir: '.svelte-kit/output/prerendered/pages',
             resetTime: true
@@ -80,9 +80,9 @@ const generateSitemap: PluginOption = {
 const checkDefaultApiEnv = (): PluginOption => ({
     name: "check-default-api",
     config() {
-        if (!process.env.WEB_DEFAULT_API) {
+        if (!process.env.SIPHON_DEFAULT_API_URL) {
             throw new Error(
-                "WEB_DEFAULT_API env variable is required, but missing."
+                "SIPHON_DEFAULT_API_URL env variable is required, but missing."
             );
         }
     },

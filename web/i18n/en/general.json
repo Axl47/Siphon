@@ -1,7 +1,7 @@
 {
-    "cobalt": "cobalt",
+    "cobalt": "siphon",
     "meowbalt": "meowbalt",
     "beta": "beta",
 
-    "embed.description": "cobalt lets you save what you love without ads, tracking, paywalls or other nonsense. just paste the link and you're ready to rock!"
+    "embed.description": "siphon lets you extract media through your own cobalt instance, keep control of downloads, and avoid third-party downloader clutter."
 }

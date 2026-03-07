@@ -1,7 +1,8 @@
 {
-    "name": "cobalt",
+    "name": "siphon",
     "packageManager": "pnpm@9.6.0",
     "engines": {
+        "node": ">=20 <21",
         "pnpm": ">=9"
     }
 }

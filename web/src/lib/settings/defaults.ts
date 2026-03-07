@@ -3,7 +3,7 @@ import { defaultLocale } from "$lib/i18n/translations";
 import type { CobaltSettings } from "$lib/types/settings";
 
 const defaultSettings: CobaltSettings = {
-    schemaVersion: 6,
+    schemaVersion: 7,
     advanced: {
         debug: false,
         useWebCodecs: false,
@@ -19,6 +19,10 @@ const defaultSettings: CobaltSettings = {
         reduceTransparency: false,
         disableHaptics: false,
         dontAutoOpenQueue: false,
+    },
+    connection: {
+        instanceUrl: "",
+        apiKey: "",
     },
     save: {
         alwaysProxy: false,
@@ -41,16 +45,6 @@ const defaultSettings: CobaltSettings = {
         youtubeHLS: false,
         youtubeBetterAudio: false,
     },
-    privacy: {
-        disableAnalytics: false,
-    },
-    processing: {
-        customInstanceURL: "",
-        customApiKey: "",
-        enableCustomInstances: false,
-        enableCustomApiKey: false,
-        seenCustomWarning: false,
-    }
 }
 
 export default defaultSettings;

@@ -1,61 +1,50 @@
 <div align="center">
     <br/>
     <p>
-        <img src="web/static/favicon.png" title="cobalt" alt="cobalt logo" width="100" />
+        <img src="web/static/icons/siphon-icon.svg" title="siphon" alt="siphon logo" width="100" />
     </p>
     <p>
-        best way to save what you love
+        media extraction for your own cobalt instance
         <br/>
-        <a href="https://cobalt.tools">
-            cobalt.tools
-        </a>
-    </p>
-    <p>
-        <a href="https://discord.gg/pQPt8HBUPu">
-            💬 community discord server
-        </a>
-        <br/>
-        <a href="https://x.com/justusecobalt">
-            🐦 twitter
-        </a>
-        <a href="https://bsky.app/profile/cobalt.tools">
-            🦋 bluesky
-        </a>
+        SvelteKit frontend + cobalt processing backend
     </p>
     <br/>
 </div>
 
-cobalt is a media downloader that doesn't piss you off. it's friendly, efficient, and doesn't have ads, trackers, paywalls or other nonsense.
+Siphon is a fork of cobalt.tools that is being reshaped into a self-hosted media extraction client. The backend remains compatible with the upstream cobalt API, while the frontend and local developer workflow are being aligned around the Siphon product spec in [`.docs/siphon_spec.md`](.docs/siphon_spec.md).
 
-paste the link, get the file, move on. that simple, just how it should be.
+## Local setup
 
-### cobalt monorepo
-this monorepo includes source code for api, frontend, and related packages:
+- Node.js `20.x` is required.
+- pnpm `9.x` is required.
+- Enable pnpm through Corepack:
+  `corepack enable && corepack prepare pnpm@9.6.0 --activate`
+- Install workspace dependencies from the repo root:
+  `pnpm install --frozen-lockfile`
+
+Frontend development expects [`web/.env.example`](web/.env.example), especially `SIPHON_DEFAULT_API_URL`. API development expects [`api/.env.example`](api/.env.example) and an API key file such as [`api/keys.sample.json`](api/keys.sample.json).
+
+## Repository layout
+
+This monorepo includes source code for the API, frontend, and related packages:
 - [api tree & readme](/api/)
 - [web tree & readme](/web/)
 - [packages tree](/packages/)
 
-it also includes documentation in the [docs tree](/docs/):
-- [how to run a cobalt instance](/docs/run-an-instance.md)
-- [how to protect a cobalt instance](/docs/protect-an-instance.md)
-- [cobalt api instance environment variables](/docs/api-env-variables.md)
-- [cobalt api documentation](/docs/api.md)
+It also includes local documentation in the [`.docs` tree](./.docs/):
+- [how to run a cobalt instance](./.docs/run-an-instance.md)
+- [how to protect a cobalt instance](./.docs/protect-an-instance.md)
+- [cobalt api instance environment variables](./.docs/api-env-variables.md)
+- [cobalt api documentation](./.docs/api.md)
 
-### ethics
-cobalt is a tool that makes downloading public content easier. it takes **zero liability**.
-the end user is responsible for what they download, how they use and distribute that content.
-cobalt never caches any content, it [works like a fancy proxy](/api/src/stream/).
+## Ethics
 
-cobalt is in no way a piracy tool and cannot be used as such.
-it can only download free & publicly accessible content.
-same content can be downloaded via dev tools of any modern web browser.
+Siphon inherits cobalt’s basic model: it makes downloading public content easier, but the end user remains responsible for what they download and how they use it. The processing server works like a proxy and does not turn the project into a piracy tool.
 
-### contributing
-if you're considering contributing to cobalt, first of all, thank you! check the [contribution guidelines here](/CONTRIBUTING.md) before getting started, they'll help you do your best right away.
+## Contributing
 
-### thank you
-cobalt is sponsored by [royalehosting.net](https://royalehosting.net/?partner=cobalt). a part of our infrastructure is hosted on their network. we really appreciate their kindness and support!
+Check the [contribution guidelines here](/CONTRIBUTING.md) before getting started.
 
-### licenses
-for relevant licensing information, see the [api](api/README.md) and [web](web/README.md) READMEs.
-unless specified otherwise, the remainder of this repository is licensed under [AGPL-3.0](LICENSE).
+## Licenses
+
+For relevant licensing information, see the [api](api/README.md) and [web](web/README.md) READMEs. Unless specified otherwise, the remainder of this repository is licensed under [AGPL-3.0](LICENSE).

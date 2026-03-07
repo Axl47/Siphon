@@ -6,11 +6,9 @@
     "
 >
     import { get } from "svelte/store";
-    import { t } from "$lib/i18n/translations";
     import type { CobaltSettings } from "$lib/types/settings";
 
     import settings, { updateSetting } from "$lib/state/settings";
-    import { customInstanceWarning } from "$lib/api/safety-warning";
 
     import IconX from "@tabler/icons-svelte/IconX.svelte";
     import IconCheck from "@tabler/icons-svelte/IconCheck.svelte";
@@ -18,6 +16,7 @@
 
     import IconEye from "@tabler/icons-svelte/IconEye.svelte";
     import IconEyeOff from "@tabler/icons-svelte/IconEyeOff.svelte";
+    import { t } from "$lib/i18n/translations";
 
     type SettingsInputType = "url" | "uuid";
 
@@ -28,7 +27,6 @@
     export let type: "url" | "uuid" = "url";
 
     export let sensitive = false;
-    export let showInstanceWarning = false;
 
     const regex = {
         uuid: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
@@ -76,20 +74,7 @@
         inputValue = String(get(settings)[settingContext][settingId]);
     };
 
-    const save = async () => {
-        if (showInstanceWarning) {
-            await customInstanceWarning();
-
-            if ($settings.processing.seenCustomWarning) {
-                // fall back to uuid to allow writing empty strings
-                return writeToSettings(inputValue, inputValue ? type : "uuid");
-            }
-
-            return;
-        }
-
-        return writeToSettings(inputValue, type);
-    };
+    const save = async () => writeToSettings(inputValue, type);
 </script>
 
 <div id="settings-input-holder">

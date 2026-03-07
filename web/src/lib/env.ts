@@ -2,7 +2,7 @@ import * as _env from "$env/static/public";
 
 const getEnv = (_key: string) => {
     const env = _env as Record<string, string | undefined>;
-    const key = `WEB_${_key}`;
+    const key = `SIPHON_${_key}`;
 
     if (key in env) {
         return env[key];
@@ -16,9 +16,7 @@ const getEnvBool = (key: string) => {
 
 const variables = {
     HOST: getEnv('HOST'),
-    PLAUSIBLE_HOST: getEnv('PLAUSIBLE_HOST'),
-    PLAUSIBLE_ENABLED: getEnv('HOST') && getEnv('PLAUSIBLE_HOST'),
-    DEFAULT_API: getEnv('DEFAULT_API'),
+    DEFAULT_API_URL: getEnv('DEFAULT_API_URL'),
     ENABLE_WEBCODECS: getEnvBool('ENABLE_WEBCODECS'),
     ENABLE_DEPRECATED_YOUTUBE_HLS: getEnvBool('ENABLE_DEPRECATED_YOUTUBE_HLS'),
 }
@@ -62,7 +60,5 @@ const docs = {
     apiLicense: "https://github.com/imputnet/cobalt/blob/main/api/LICENSE",
 };
 
-const officialApiURL = "https://api.cobalt.tools";
-
-export { donate, officialApiURL, contacts, partners, siriShortcuts, docs };
+export { donate, contacts, partners, siriShortcuts, docs };
 export default variables;
