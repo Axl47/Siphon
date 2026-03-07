@@ -13,6 +13,7 @@ for local development in this fork:
 
 ### local youtube setup
 - local YouTube downloads are expected to work with cobalt's built-in PO token generation. keep `YOUTUBE_GENERATE_PO_TOKENS` enabled for local development.
+- this fork can automatically fall back to YouTube HLS when direct media URLs are too range-restricted to complete a local tunnel download.
 - `YOUTUBE_SESSION_SERVER` is optional and meant for advanced or hosted setups that deliberately provide external session tokens.
 - the supported YouTube tuning envs in this fork are `YOUTUBE_GENERATE_PO_TOKENS`, `YOUTUBE_SESSION_SERVER`, `YOUTUBE_SESSION_INNERTUBE_CLIENT`, `CUSTOM_INNERTUBE_CLIENT`, and `YOUTUBE_PLAYER_ID`.
 - fork-specific envs from third-party guides such as `YOUTUBE_USE_ONESIE` are not implemented in this repo and should not be treated as part of the local setup.

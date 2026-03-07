@@ -3,7 +3,7 @@ import HLS from "hls-parser";
 import { Innertube, Session, UniversalCache, Platform } from "youtubei.js";
 import vm from 'node:vm';
 
-import { env } from "../../config.js";
+import { env, genericUserAgent } from "../../config.js";
 import { getCookie } from "../cookie/manager.js";
 import { createStream } from "../../stream/manage.js";
 import { getYouTubeSession } from "../helpers/youtube-session.js";
@@ -48,6 +48,17 @@ const hlsCodecList = {
 const clientsWithNoCipher = ['IOS', 'ANDROID', 'YTSTUDIO_ANDROID', 'YTMUSIC_ANDROID'];
 
 const videoQualities = [144, 240, 360, 480, 720, 1080, 1440, 2160, 4320];
+const youtubeRangeProbeHeaders = {
+    'user-agent': genericUserAgent,
+    accept: '*/*',
+    origin: 'https://www.youtube.com',
+    referer: 'https://www.youtube.com',
+    DNT: '?1'
+};
+const youtubeRangeProbeWindow = {
+    video: 2621439,
+    audio: 1572863,
+};
 
 let unavailableResponses = 0;
 
@@ -247,6 +258,59 @@ const getSubtitles = async (info, dispatcher, subtitleLang) => {
     }
 }
 
+const supportsLargeRangeProbe = async (url, maxByte, dispatcher) => {
+    if (!url || maxByte < 0) {
+        return true;
+    }
+
+    try {
+        const response = await fetch(url, {
+            headers: {
+                ...youtubeRangeProbeHeaders,
+                Range: `bytes=0-${maxByte}`
+            },
+            dispatcher,
+            signal: AbortSignal.timeout(5000),
+        });
+
+        try {
+            await response.body?.cancel?.();
+        } catch {}
+
+        return response.status === 200 || response.status === 206;
+    } catch {
+        return false;
+    }
+}
+
+const shouldFallbackToHLS = async ({ videoUrl, videoLength, audioUrl, audioLength, dispatcher }) => {
+    if (audioUrl && audioLength > youtubeRangeProbeWindow.audio) {
+        const audioRangeOk = await supportsLargeRangeProbe(
+            audioUrl,
+            youtubeRangeProbeWindow.audio,
+            dispatcher
+        );
+
+        if (!audioRangeOk) {
+            return true;
+        }
+    }
+
+    if (videoUrl && videoLength > youtubeRangeProbeWindow.video) {
+        const videoRangeOk = await supportsLargeRangeProbe(
+            videoUrl,
+            youtubeRangeProbeWindow.video,
+            dispatcher
+        );
+
+        if (!videoRangeOk) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /**
  * @param {Innertube} yt 
  * @param {*} o 
@@ -296,7 +360,7 @@ const fetchPost = async (yt, o) => {
     }
 }
 
-export default async function (o) {
+export default async function youtubeService(o) {
     const quality = o.quality === "max" ? 9000 : Number(o.quality);
 
     let useHLS = o.youtubeHLS;
@@ -693,6 +757,7 @@ export default async function (o) {
     if (audio && o.isAudioOnly) {
         let bestAudio = codec === "h264" ? "m4a" : "opus";
         let urls = audio.url;
+        const directAudioLength = Number(audio.content_length);
 
         if (useHLS) {
             bestAudio = "mp3";
@@ -712,6 +777,27 @@ export default async function (o) {
             cover = basicInfo.thumbnail?.[0]?.url;
         }
 
+        if (!useHLS && !o.hlsFallbackAttempted) {
+            const fallbackToHLS = await shouldFallbackToHLS({
+                audioUrl: urls,
+                audioLength: directAudioLength,
+                dispatcher: o.dispatcher,
+            });
+
+            if (fallbackToHLS) {
+                const hlsFallback = await youtubeService({
+                    ...o,
+                    youtubeHLS: true,
+                    hlsFallbackAttempted: true,
+                });
+
+                if (!hlsFallback?.error) {
+                    console.warn(new Date(), `Falling back to YouTube HLS for ${o.id} (audio).`);
+                    return hlsFallback;
+                }
+            }
+        }
+
         return {
             type: "audio",
             isAudioOnly: true,
@@ -729,6 +815,8 @@ export default async function (o) {
 
     if (video && audio) {
         let resolution;
+        const directVideoLength = Number(video.content_length);
+        const directAudioLength = Number(audio.content_length);
 
         if (useHLS) {
             resolution = normalizeQuality(video.resolution);
@@ -757,6 +845,29 @@ export default async function (o) {
 
         filenameAttributes.qualityLabel = `${resolution}p`;
         filenameAttributes.youtubeFormat = codec;
+
+        if (!useHLS && !o.hlsFallbackAttempted) {
+            const fallbackToHLS = await shouldFallbackToHLS({
+                videoUrl: video,
+                videoLength: directVideoLength,
+                audioUrl: audio,
+                audioLength: directAudioLength,
+                dispatcher: o.dispatcher,
+            });
+
+            if (fallbackToHLS) {
+                const hlsFallback = await youtubeService({
+                    ...o,
+                    youtubeHLS: true,
+                    hlsFallbackAttempted: true,
+                });
+
+                if (!hlsFallback?.error) {
+                    console.warn(new Date(), `Falling back to YouTube HLS for ${o.id}.`);
+                    return hlsFallback;
+                }
+            }
+        }
 
         return {
             type: "merge",

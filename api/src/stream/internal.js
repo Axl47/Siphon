@@ -67,7 +67,7 @@ const requestChunk = async (streamInfo, start, end) => request(streamInfo.url, {
 });
 
 async function* readChunks(streamInfo, size, read = 0n) {
-    let chunksSinceTransplant = 0;
+    let refreshAttempts = 0;
     const chunkSize = getChunkSize(streamInfo);
     while (read < size) {
         if (streamInfo.controller.signal.aborted) {
@@ -77,15 +77,13 @@ async function* readChunks(streamInfo, size, read = 0n) {
         const chunkEnd = min(read + chunkSize - 1n, size - 1n);
         const chunk = await requestChunk(streamInfo, read, chunkEnd);
 
-        if (chunk.statusCode === 403 && chunksSinceTransplant >= 3 && streamInfo.transplant) {
-            chunksSinceTransplant = 0;
+        if (chunk.statusCode === 403 && refreshAttempts < 3 && streamInfo.transplant) {
+            refreshAttempts++;
             try {
                 await streamInfo.transplant(streamInfo.dispatcher);
                 continue;
             } catch {}
         }
-
-        chunksSinceTransplant++;
 
         if (chunk.statusCode < 200 || chunk.statusCode > 299) {
             logChunkedFailure(streamInfo, "range-request", `status ${chunk.statusCode}`);
@@ -116,6 +114,7 @@ async function* readChunks(streamInfo, size, read = 0n) {
             yield data;
         }
 
+        refreshAttempts = 0;
         read += received;
     }
 }
