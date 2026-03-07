@@ -10,6 +10,9 @@ import { join, basename } from "node:path";
 import { createReadStream } from "node:fs";
 import { cp, readdir, mkdir } from "node:fs/promises";
 
+const isTrue = (value?: string) => ["1", "true"].includes(value?.toLowerCase() || "");
+const devHttpsEnabled = isTrue(process.env.SIPHON_DEV_HTTPS);
+
 const exposeLibAV: PluginOption = (() => {
     const IMPUT_MODULE_DIR = join(__dirname, 'node_modules/@imput');
     return {
@@ -91,12 +94,12 @@ const checkDefaultApiEnv = (): PluginOption => ({
 export default defineConfig({
     plugins: [
         checkDefaultApiEnv(),
-        basicSSL(),
+        devHttpsEnabled ? basicSSL() : null,
         sveltekit(),
         enableCOEP,
         exposeLibAV,
         generateSitemap
-    ],
+    ].filter(Boolean),
     build: {
         sourcemap: true,
         rollupOptions: {
@@ -113,6 +116,7 @@ export default defineConfig({
         }
     },
     server: {
+        https: devHttpsEnabled,
         headers: {
             "Cross-Origin-Opener-Policy": "same-origin",
             "Cross-Origin-Embedder-Policy": "require-corp"

@@ -5,6 +5,7 @@ the siphon frontend is a static web app built with
 ## configuring
 - to run the dev environment, run `pnpm run dev`.
 - to make the release build of the frontend, run `pnpm run build`.
+- local dev defaults to `http://localhost:5173`. set `SIPHON_DEV_HTTPS=true` only if you explicitly want HTTPS locally.
 
 ## environment variables
 the frontend has several build-time environment variables for configuring various features. to use
@@ -16,6 +17,7 @@ them, you must specify them when building the frontend (or running a vite server
 |:--------------------------------|:----------------------------|:--------------------------------------------------------------------------------------------------------|
 | `SIPHON_HOST`                   | `siphon.local`              | optional domain on which the frontend will be running. used for meta tags and sitemap generation.       |
 | `SIPHON_DEFAULT_API_URL`        | `https://siphon.example/`   | default cobalt instance url used for frontend clients.                                                   |
+| `SIPHON_DEV_HTTPS`              | `true`                      | optional. makes `vite dev` run over HTTPS; when enabled, the API `CORS_URL` must match the HTTPS origin. |
 | `SIPHON_ENABLE_DEPRECATED_YOUTUBE_HLS` | `true`               | enables the youtube HLS settings entry; allows sending the related variable to the processing instance. |
 | `SIPHON_ENABLE_WEBCODECS`       | `true`                      | exposes the experimental WebCodecs toggle for local processing.                                         |
 
