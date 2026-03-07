@@ -5,11 +5,14 @@
     import "@fontsource/ibm-plex-mono/400.css";
     import "@fontsource/ibm-plex-mono/400-italic.css";
     import "@fontsource/ibm-plex-mono/500.css";
+    import "@fontsource/dm-sans/400.css";
+    import "@fontsource/dm-sans/500.css";
+    import "@fontsource/newsreader/400.css";
+    import "@fontsource/newsreader/500.css";
 
     import { onMount } from "svelte";
-    import { page } from "$app/stores";
-    import { updated } from "$app/stores";
-    import { browser } from "$app/environment";
+    import { page, updated } from "$app/stores";
+    import { browser, dev } from "$app/environment";
     import { afterNavigate } from "$app/navigation";
 
     import "$lib/polyfills";
@@ -18,7 +21,6 @@
     import settings from "$lib/state/settings";
 
     import { t } from "$lib/i18n/translations";
-
     import { device, app } from "$lib/device";
     import { getServerInfo } from "$lib/api/server-info";
     import currentTheme, { statusBarColors } from "$lib/state/theme";
@@ -36,20 +38,66 @@
         $settings.accessibility.reduceTransparency ||
         device.prefers.reducedTransparency;
 
+    $: isRootRoute = $page.url.pathname === "/";
     $: preloadAssets = false;
 
-    afterNavigate(async () => {
-        const to_focus: HTMLElement | null =
-            document.querySelector("[data-first-focus]");
-        to_focus?.focus();
+    const DEV_SW_RESET_KEY = "siphon-dev-sw-reset";
 
-        if ($page.url.pathname === "/") {
+    const resetDevServiceWorkers = async () => {
+        if (!("serviceWorker" in navigator)) {
+            return;
+        }
+
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        const matchingRegistrations = registrations.filter((registration) =>
+            registration.scope.startsWith(window.location.origin)
+        );
+
+        if (!matchingRegistrations.length) {
+            sessionStorage.removeItem(DEV_SW_RESET_KEY);
+            return;
+        }
+
+        await Promise.all(matchingRegistrations.map((registration) => registration.unregister()));
+
+        if ("caches" in window) {
+            const keys = await caches.keys();
+            await Promise.all(
+                keys
+                    .filter((key) => key.startsWith("siphon-shell-"))
+                    .map((key) => caches.delete(key))
+            );
+        }
+
+        if (navigator.serviceWorker.controller && !sessionStorage.getItem(DEV_SW_RESET_KEY)) {
+            sessionStorage.setItem(DEV_SW_RESET_KEY, "1");
+            window.location.reload();
+            return;
+        }
+
+        sessionStorage.removeItem(DEV_SW_RESET_KEY);
+    };
+
+    afterNavigate(async () => {
+        const toFocus: HTMLElement | null =
+            document.querySelector("[data-first-focus]");
+        toFocus?.focus();
+
+        if (!isRootRoute) {
             await getServerInfo();
         }
     });
 
     onMount(() => {
         preloadAssets = true;
+
+        if ("serviceWorker" in navigator) {
+            if (dev) {
+                resetDevServiceWorkers().catch(() => {});
+            } else {
+                navigator.serviceWorker.register("/service-worker.js").catch(() => {});
+            }
+        }
     });
 </script>
 
@@ -75,7 +123,6 @@
             content={statusBarColors.desktop[$currentTheme]}
         />
     {/if}
-
 </svelte:head>
 
 <div
@@ -86,31 +133,54 @@
     {#if preloadAssets}
         <div id="preload" aria-hidden="true">??</div>
     {/if}
-    <div
-        id="cobalt"
-        class:loaded={browser}
-        data-chrome={device.browser.chrome}
-        data-iphone={device.is.iPhone}
-        data-mobile={device.is.mobile}
-        data-reduce-motion={reduceMotion}
-        data-reduce-transparency={reduceTransparency}
-    >
-        {#if device.is.iPhone && app.is.installed}
-            <NotchSticker />
-        {/if}
-        <DialogHolder />
-        <Sidebar />
-        {#if $updated}
-            <UpdateNotification />
-        {/if}
-        <ProcessingQueue />
-        <div id="content">
-            <slot></slot>
+
+    {#if isRootRoute}
+        <div
+            id="siphon-root-shell"
+            class:loaded={browser}
+            data-mobile={device.is.mobile}
+            data-reduce-motion={reduceMotion}
+            data-reduce-transparency={reduceTransparency}
+        >
+            <slot />
         </div>
-    </div>
+    {:else}
+        <div
+            id="cobalt"
+            class:loaded={browser}
+            data-chrome={device.browser.chrome}
+            data-iphone={device.is.iPhone}
+            data-mobile={device.is.mobile}
+            data-reduce-motion={reduceMotion}
+            data-reduce-transparency={reduceTransparency}
+        >
+            {#if device.is.iPhone && app.is.installed}
+                <NotchSticker />
+            {/if}
+            <DialogHolder />
+            <Sidebar />
+            {#if $updated}
+                <UpdateNotification />
+            {/if}
+            <ProcessingQueue />
+            <div id="content">
+                <slot />
+            </div>
+        </div>
+    {/if}
 </div>
 
 <style>
+    #siphon-root-shell {
+        min-height: 100vh;
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        overflow: hidden;
+        background: var(--siphon-bg-root);
+        color: var(--text-primary);
+    }
+
     #cobalt {
         height: 100%;
         width: 100%;
@@ -124,7 +194,6 @@
         position: fixed;
     }
 
-    /* add padding for notch / dynamic island in landscape */
     @media screen and (orientation: landscape) and (min-width: 535px) {
         #cobalt[data-iphone="true"] {
             grid-template-columns:
@@ -166,7 +235,6 @@
     }
 
     @media screen and (max-width: 535px) {
-        /* dark navbar cuz it looks better on mobile */
         :global([data-theme="light"]) {
             --sidebar-bg: #000000;
             --sidebar-highlight: var(--primary);
@@ -186,16 +254,13 @@
         #content:dir(rtl) {
             padding-top: env(safe-area-inset-top);
             order: -1;
-
             margin: 0;
             box-shadow: none;
-
             border-bottom-left-radius: calc(var(--border-radius) * 2);
             border-bottom-right-radius: calc(var(--border-radius) * 2);
         }
     }
 
-    /* preload assets to prevent flickering when they appear on screen */
     #preload {
         width: 0;
         height: 0;
@@ -203,11 +268,9 @@
         z-index: -10;
         content: url(/meowbalt/smile.png) url(/meowbalt/error.png)
             url(/meowbalt/question.png) url(/meowbalt/think.png);
-
         font-family: "Noto Sans Mono";
         font-size: 0;
         opacity: 0;
-
         pointer-events: none;
         user-select: none;
         -webkit-user-select: none;

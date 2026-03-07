@@ -10,7 +10,7 @@
     },
     "scripts": {
         "start": "node src/cobalt",
-        "test": "node src/util/test",
+        "test": "node --test src/**/*.test.js && node src/util/test",
         "token:jwt": "node src/util/generate-jwt-secret"
     },
     "repository": {

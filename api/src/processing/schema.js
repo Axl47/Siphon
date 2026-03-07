@@ -62,3 +62,25 @@ export const apiSchema = z.object({
     youtubeBetterAudio: z.boolean().default(false),
 })
 .strict();
+
+export const siphonAnalyzeSchema = z.object({
+    url: z.string()
+          .min(1)
+          .transform(url => normalizeURL(url)),
+
+    audioFormat: z.enum(
+        ["best", "mp3", "ogg", "wav", "opus"]
+    ).default("mp3"),
+
+    youtubeVideoCodec: z.enum(
+        ["h264", "av1", "vp9"]
+    ).default("h264"),
+
+    youtubeVideoContainer: z.enum(
+        ["auto", "mp4", "webm", "mkv"]
+    ).default("auto"),
+
+    allowH265: z.boolean().default(false),
+    tiktokFullAudio: z.boolean().default(false),
+})
+.strict();

@@ -8,6 +8,20 @@ When writing complex features or significant refactors, use an ExecPlan (as desc
 
 Whenever new updates are made, this file (`AGENTS.md`) should be updated with any surprising files not apparent from the codebase that could benefit other developers. Focus on the why and when it could be useful.
 
+- `api/src/processing/match.js` now exports `resolveMatchData` alongside the existing default matcher. Use it when you need raw extractor output and cobalt routing decisions without immediately collapsing the result into the legacy `tunnel`/`redirect`/`picker` response body. This is the safest extension point for Siphon-owned API surfaces such as `/analyze`.
+
+- `api/src/processing/match-action.js` now exports `resolveMatchAction`. Reach for it when you need the post-extractor action decision plus the underlying response payload before `createResponse()` wraps it. This is useful for estimating sizes or reusing filename/format decisions in new API flows.
+
+- `web/src/lib/siphon/` is the Phase 1 product layer for the new `/` route. It intentionally does not replace the old cobalt stores and routes. Use it when working on the Siphon main flow, history, sidecars, or connection UX; use the older `web/src/lib/state/*` modules only when touching legacy cobalt routes.
+
+- `web/src/service-worker.ts` only caches the Siphon app shell for offline boot and history visibility. It does not implement background downloads or a POST share-target interception. Check it when debugging stale offline assets or when extending the PWA behavior beyond shell caching.
+
+- `web/src/routes/+page.svelte` now uses a full-height two-row app shell (`topbar` + active screen) with the quality screen rendered as a three-row grid (`header`, scrollable list, pinned footer). Use that structure when touching quality selection or “missing CTA” bugs; the footer is intentionally outside the scroll area so the download action remains reachable on short viewports.
+
+- The Siphon settings overlay is intentionally minimal now: fields, transient connection result, divider, metadata toggle. Do not re-add the old persistent status summary unless the product explicitly asks for richer diagnostics; background heartbeat remains silent.
+
+- `web/src/lib/siphon/history.ts` is the durable memory layer, not just the recent/history query helper. Each successful download already stores its sidecar payload inside IndexedDB via `DownloadRecord.sidecar`, and aggregate export now comes from `buildMemoryExport()` / `exportMemoryArchive()`. Use this file when adding stats, backups, or future “memory” features instead of creating a second storage path.
+
 ## Sub Agents
 
 Use sub-agents where appropriate to break down complex changes into manageable pieces, and to allow for more focused implementation and testing. For example, if implementing a new feature that requires both backend and frontend changes, you might create separate sub-agents for each layer of the stack, but before then use an exploring agent (or multiple) to get context on the codebase and research the best approaches for the feature, outline the specific steps needed for implementation into a final exec plan, and spin up task subagents that handle the implementation. This allows for more efficient development and testing, as each sub-agent can focus on a specific aspect of the implementation, and can be tested independently before being integrated into the larger codebase.

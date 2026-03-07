@@ -189,6 +189,7 @@ body {
 
 * {
     font-family: "IBM Plex Mono", monospace;
+    box-sizing: border-box;
     user-select: none;
     scrollbar-width: none;
     -webkit-user-select: none;
@@ -471,4 +472,30 @@ tr th:first-child {
     100% {
         transform: rotate(360deg);
     }
+}
+
+:root {
+    --siphon-bg-root: #08080a;
+    --siphon-bg-surface: #0f0f12;
+    --siphon-bg-raised: rgba(255, 255, 255, 0.025);
+    --siphon-bg-hover: rgba(255, 255, 255, 0.04);
+    --siphon-accent: #7eb8d4;
+    --siphon-accent-muted: rgba(126, 184, 212, 0.07);
+    --siphon-accent-border: rgba(126, 184, 212, 0.25);
+    --siphon-accent-focus: rgba(126, 184, 212, 0.3);
+    --siphon-accent-glow: rgba(126, 184, 212, 0.1);
+    --siphon-distill: #d4a574;
+    --siphon-distill-muted: rgba(212, 165, 116, 0.06);
+    --siphon-distill-border: rgba(212, 165, 116, 0.18);
+    --text-primary: rgba(255, 255, 255, 0.78);
+    --text-secondary: rgba(255, 255, 255, 0.52);
+    --text-tertiary: rgba(255, 255, 255, 0.34);
+    --text-ghost: rgba(255, 255, 255, 0.18);
+    --siphon-border: rgba(255, 255, 255, 0.07);
+    --siphon-success: #4ade80;
+    --siphon-error: #ef4444;
+    --siphon-audio: #b8a0d4;
+    --siphon-display-font: "Newsreader", serif;
+    --siphon-body-font: "DM Sans", sans-serif;
+    --siphon-mono-font: "IBM Plex Mono", monospace;
 }

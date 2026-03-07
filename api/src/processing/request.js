@@ -1,7 +1,7 @@
 import mime from "mime";
 import ipaddr from "ipaddr.js";
 
-import { apiSchema } from "./schema.js";
+import { apiSchema, siphonAnalyzeSchema } from "./schema.js";
 import { createProxyTunnels, createStream } from "../stream/manage.js";
 
 export function createResponse(responseType, responseData) {
@@ -122,6 +122,12 @@ export function normalizeRequest(request) {
     }
 
     return apiSchema.safeParseAsync(request).catch(() => (
+        { success: false }
+    ));
+}
+
+export function normalizeAnalyzeRequest(request) {
+    return siphonAnalyzeSchema.safeParseAsync(request).catch(() => (
         { success: false }
     ));
 }

@@ -263,7 +263,7 @@ const transplantTunnel = async function (dispatcher) {
     }
 }
 
-function wrapStream(streamInfo) {
+export function wrapStream(streamInfo) {
     const url = streamInfo.urls;
 
     if (streamInfo.originalRequest) {

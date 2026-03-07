@@ -8,7 +8,7 @@ import { convertLanguageCode } from "../misc/language-codes.js";
 
 const extraProcessingTypes = new Set(["merge", "remux", "mute", "audio", "gif"]);
 
-export default function({
+export function resolveMatchAction({
     r,
     host,
     audioFormat,
@@ -280,8 +280,21 @@ export default function({
         }
     }
 
-    return createResponse(
+    return {
         responseType,
-        { ...defaultParams, ...params }
+        responseData: { ...defaultParams, ...params }
+    };
+}
+
+export default function(options) {
+    const resolved = resolveMatchAction(options);
+
+    if ("status" in resolved) {
+        return resolved;
+    }
+
+    return createResponse(
+        resolved.responseType,
+        resolved.responseData
     );
 }

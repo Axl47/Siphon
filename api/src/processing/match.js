@@ -36,7 +36,7 @@ const MAX_RETRY_AMOUNT = 5;
 
 let freebind;
 
-export default async function match({ host, patternMatch, params, authType, retryCount = 0 }) {
+export async function resolveMatchData({ host, patternMatch, params, authType, retryCount = 0 }) {
     const { url } = params;
     assert(url instanceof URL);
     let dispatcher, requestIP, proxyToUse;
@@ -70,17 +70,21 @@ export default async function match({ host, patternMatch, params, authType, retr
             isAudioMuted = params.downloadMode === "mute";
 
         if (!testers[host]) {
-            return createResponse("error", {
-                code: "error.api.service.unsupported"
-            });
+            return {
+                error: createResponse("error", {
+                    code: "error.api.service.unsupported"
+                })
+            };
         }
         if (!(testers[host](patternMatch))) {
-            return createResponse("error", {
-                code: "error.api.link.unsupported",
-                context: {
-                    service: friendlyServiceName(host),
-                }
-            });
+            return {
+                error: createResponse("error", {
+                    code: "error.api.link.unsupported",
+                    context: {
+                        service: friendlyServiceName(host),
+                    }
+                })
+            };
         }
 
         // youtubeHLS will be fully removed in the future
@@ -296,9 +300,11 @@ export default async function match({ host, patternMatch, params, authType, retr
                 break;
 
             default:
-                return createResponse("error", {
-                    code: "error.api.service.unsupported"
-                });
+                return {
+                    error: createResponse("error", {
+                        code: "error.api.service.unsupported"
+                    })
+                };
         }
 
         if (r.isAudioOnly) {
@@ -307,15 +313,17 @@ export default async function match({ host, patternMatch, params, authType, retr
         }
 
         if (r.error && r.critical) {
-            return createResponse("critical", {
-                code: `error.api.${r.error}`,
-            })
+            return {
+                error: createResponse("critical", {
+                    code: `error.api.${r.error}`,
+                })
+            };
         }
 
         if (r.error) {
             if (r.retry) {
                 if (++retryCount < MAX_RETRY_AMOUNT)
-                    return await match({ host, patternMatch, params, authType, retryCount });
+                    return await resolveMatchData({ host, patternMatch, params, authType, retryCount });
             }
             let context;
             switch(r.error) {
@@ -336,10 +344,12 @@ export default async function match({ host, patternMatch, params, authType, retr
                     break;
             }
 
-            return createResponse("error", {
-                code: `error.api.${r.error}`,
-                context,
-            })
+            return {
+                error: createResponse("error", {
+                    code: `error.api.${r.error}`,
+                    context,
+                })
+            };
         }
 
         let localProcessing = params.localProcessing;
@@ -351,27 +361,41 @@ export default async function match({ host, patternMatch, params, authType, retr
             localProcessing = "preferred";
         }
 
-        return matchAction({
-            r,
-            host,
-            audioFormat: params.audioFormat,
-            isAudioOnly,
-            isAudioMuted,
-            disableMetadata: params.disableMetadata,
-            filenameStyle: params.filenameStyle,
-            convertGif: params.convertGif,
-            requestIP,
-            proxyToUse,
-            audioBitrate: params.audioBitrate,
-            alwaysProxy: params.alwaysProxy || localProcessing === "forced",
-            localProcessing,
-        })
-    } catch {
-        return createResponse("error", {
-            code: "error.api.fetch.critical",
-            context: {
-                service: friendlyServiceName(host),
+        return {
+            data: {
+                r,
+                host,
+                audioFormat: params.audioFormat,
+                isAudioOnly,
+                isAudioMuted,
+                disableMetadata: params.disableMetadata,
+                filenameStyle: params.filenameStyle,
+                convertGif: params.convertGif,
+                requestIP,
+                proxyToUse,
+                audioBitrate: params.audioBitrate,
+                alwaysProxy: params.alwaysProxy || localProcessing === "forced",
+                localProcessing,
             }
-        })
+        };
+    } catch {
+        return {
+            error: createResponse("error", {
+                code: "error.api.fetch.critical",
+                context: {
+                    service: friendlyServiceName(host),
+                }
+            })
+        };
     }
+}
+
+export default async function match(options) {
+    const resolved = await resolveMatchData(options);
+
+    if (resolved.error) {
+        return resolved.error;
+    }
+
+    return matchAction(resolved.data);
 }

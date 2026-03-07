@@ -8,6 +8,7 @@ import { getCommit, getBranch, getRemote, getVersion } from "@imput/version-info
 import jwt from "../security/jwt.js";
 import stream from "../stream/stream.js";
 import match from "../processing/match.js";
+import { analyzeMatch } from "../processing/analyze.js";
 
 import { env } from "../config.js";
 import { extract } from "../processing/url.js";
@@ -18,7 +19,7 @@ import { randomizeCiphers } from "../misc/randomize-ciphers.js";
 import { verifyTurnstileToken } from "../security/turnstile.js";
 import { friendlyServiceName } from "../processing/service-alias.js";
 import { verifyStream } from "../stream/manage.js";
-import { createResponse, normalizeRequest, getIP } from "../processing/request.js";
+import { createResponse, normalizeRequest, normalizeAnalyzeRequest, getIP } from "../processing/request.js";
 import { setupTunnelHandler } from "./itunnel.js";
 
 import * as APIKeys from "../security/api-keys.js";
@@ -39,6 +40,8 @@ const corsConfig = env.corsWildcard ? {} : {
     origin: env.corsURL,
     optionsSuccessStatus: 200
 }
+
+const apiPostRoutes = ['/', '/analyze'];
 
 const fail = (res, code, context) => {
     const { status, body } = createResponse("error", { code, context });
@@ -129,7 +132,7 @@ export const runAPI = async (express, app, __dirname, isPrimary = true) => {
         ...corsConfig,
     }));
 
-    app.post('/', (req, res, next) => {
+    app.post(apiPostRoutes, (req, res, next) => {
         if (!acceptRegex.test(req.header('Accept'))) {
             return fail(res, "error.api.header.accept");
         }
@@ -139,7 +142,7 @@ export const runAPI = async (express, app, __dirname, isPrimary = true) => {
         next();
     });
 
-    app.post('/', (req, res, next) => {
+    app.post(apiPostRoutes, (req, res, next) => {
         if (!env.apiKeyURL) {
             return next();
         }
@@ -167,7 +170,7 @@ export const runAPI = async (express, app, __dirname, isPrimary = true) => {
         return next();
     });
 
-    app.post('/', (req, res, next) => {
+    app.post(apiPostRoutes, (req, res, next) => {
         if (!isSessionRequired(getIP(req)) || req.rateLimitKey) {
             return next();
         }
@@ -199,7 +202,7 @@ export const runAPI = async (express, app, __dirname, isPrimary = true) => {
         next();
     });
 
-    app.post('/', apiLimiter);
+    app.post(apiPostRoutes, apiLimiter);
     app.use('/', express.json({ limit: 1024 }));
 
     app.use('/', (err, _, res, next) => {
@@ -280,6 +283,49 @@ export const runAPI = async (express, app, __dirname, isPrimary = true) => {
             res.status(result.status).json(result.body);
         } catch {
             fail(res, "error.api.generic");
+        }
+    });
+
+    app.post('/analyze', async (req, res) => {
+        const request = req.body;
+
+        if (!request.url) {
+            return fail(res, "error.api.link.missing");
+        }
+
+        const { success, data: normalizedRequest } = await normalizeAnalyzeRequest(request);
+        if (!success) {
+            return fail(res, "error.api.invalid_body");
+        }
+
+        const parsed = extract(
+            normalizedRequest.url,
+            APIKeys.getAllowedServices(req.rateLimitKey),
+        );
+
+        if (!parsed) {
+            return fail(res, "error.api.link.invalid");
+        }
+
+        if ("error" in parsed) {
+            return fail(res, `error.api.${parsed.error}`, parsed.context);
+        }
+
+        try {
+            const result = await analyzeMatch({
+                host: parsed.host,
+                patternMatch: parsed.patternMatch,
+                request: normalizedRequest,
+                authType: req.authType ?? "none",
+            });
+
+            if (result.status === "error") {
+                return res.status(400).json(result);
+            }
+
+            return res.status(200).json(result);
+        } catch {
+            return fail(res, "error.api.generic");
         }
     });
 

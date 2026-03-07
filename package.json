@@ -1,6 +1,14 @@
 {
     "name": "siphon",
+    "private": true,
     "packageManager": "pnpm@9.6.0",
+    "scripts": {
+        "dev": "pnpm --dir web dev",
+        "build": "pnpm --dir web build",
+        "check": "pnpm --dir web check",
+        "dev:api": "pnpm --dir api dev",
+        "test:api": "pnpm --dir api test"
+    },
     "engines": {
         "node": ">=20 <21",
         "pnpm": ">=9"
