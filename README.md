@@ -68,6 +68,8 @@ This is the recommended default for VPS or datacenter deployments where YouTube 
 
 If you need to disable the session generator for troubleshooting, set `YOUTUBE_SESSION_SERVER` to an explicit empty string in Dokploy. The Compose file uses unset-only interpolation so a blank value really disables it.
 
+The Compose stack also waits for the session generator's webserver healthcheck on `/update` before starting the API. That avoids a startup race where the API tries `yt-session-generator:8080` before the helper server is listening.
+
 ### Dokploy domains
 
 Attach domains in Dokploy's Domains tab instead of putting routing labels in Compose:

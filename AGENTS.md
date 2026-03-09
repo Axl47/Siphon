@@ -34,6 +34,8 @@ Whenever new updates are made, this file (`AGENTS.md`) should be updated with an
 
 - In Dokploy Compose interpolation, `${VAR:-default}` makes an empty string fall back to the default. The deployment uses `${YOUTUBE_SESSION_SERVER-default}` instead so setting `YOUTUBE_SESSION_SERVER` to `""` actually disables the session generator for debugging.
 
+- `yt-session-generator` returns `503` on `/token` until it has actually produced a token. The Dokploy healthcheck therefore targets `/update` and the API uses `depends_on: service_healthy`; otherwise the API can start too early and log a misleading `ECONNREFUSED` against `yt-session-generator:8080`.
+
 ## Sub Agents
 
 Use sub-agents where appropriate to break down complex changes into manageable pieces, and to allow for more focused implementation and testing. For example, if implementing a new feature that requires both backend and frontend changes, you might create separate sub-agents for each layer of the stack, but before then use an exploring agent (or multiple) to get context on the codebase and research the best approaches for the feature, outline the specific steps needed for implementation into a final exec plan, and spin up task subagents that handle the implementation. This allows for more efficient development and testing, as each sub-agent can focus on a specific aspect of the implementation, and can be tested independently before being integrated into the larger codebase.

@@ -24,7 +24,7 @@ services:
   api:
     depends_on:
       yt-session-generator:
-        condition: service_started
+        condition: service_healthy
     build:
       context: .
       dockerfile: deploy/dokploy/api.Dockerfile
@@ -91,7 +91,7 @@ services:
           "-q",
           "-O",
           "/dev/null",
-          "http://127.0.0.1:8080/token",
+          "http://127.0.0.1:8080/update",
         ]
       interval: 30s
       timeout: 5s
