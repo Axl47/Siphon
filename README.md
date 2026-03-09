@@ -24,6 +24,63 @@ Siphon is a fork of cobalt.tools that is being reshaped into a self-hosted media
 
 Frontend development expects [`web/.env.example`](web/.env.example), especially `SIPHON_DEFAULT_API_URL`. API development expects [`api/.env.example`](api/.env.example) and an API key file such as [`api/keys.sample.json`](api/keys.sample.json).
 
+## Dokploy deployment
+
+Siphon now includes a Dokploy-ready Docker Compose deployment at [`docker-compose.yml`](docker-compose.yml). It runs as two services:
+
+- `web`: a static SvelteKit build served by nginx on container port `80`
+- `api`: the cobalt-compatible processing API on container port `9000`
+
+The Dokploy-specific container assets live under [`deploy/dokploy/`](deploy/dokploy/). This path is separate from the old root [`Dockerfile`](Dockerfile), which remains an API-only image and is not the recommended Dokploy path.
+
+### Required Dokploy variables
+
+Define these variables in Dokploy before the first deploy:
+
+- `SIPHON_HOST=siphon.example.com`
+- `SIPHON_DEFAULT_API_URL=https://api.example.com`
+- `API_URL=https://api.example.com/`
+- `CORS_URL=https://siphon.example.com`
+- `CORS_WILDCARD=0`
+- `API_AUTH_REQUIRED=1`
+- `API_KEY_URL=file:///run/secrets/siphon-keys.json`
+
+You can start from [`deploy/dokploy/dokploy.env.example`](deploy/dokploy/dokploy.env.example) when filling in Dokploy variables for a project.
+
+### Dokploy mounted files
+
+Use Dokploy Mounted Files instead of baking secrets into the image:
+
+- required: mount `keys.json` read-only to `/run/secrets/siphon-keys.json`
+- optional: mount `cookies.json` read-only to `/run/secrets/cookies.json`
+
+If you enable Cloudflare Turnstile later, also define `TURNSTILE_SITEKEY`, `TURNSTILE_SECRET`, and `JWT_SECRET`.
+
+### Dokploy domains
+
+Attach domains in Dokploy's Domains tab instead of putting routing labels in Compose:
+
+- `siphon.example.com` → `web` service port `80`
+- `api.example.com` → `api` service port `9000`
+
+### Local Docker validation
+
+From the repository root, validate the same deployment assets locally:
+
+`docker compose --env-file deploy/dokploy/dokploy.env.example config`
+
+`docker compose --env-file deploy/dokploy/dokploy.env.example build web api`
+
+`docker compose --env-file deploy/dokploy/dokploy.env.example up -d`
+
+Because the compose file publishes container ports without fixed host bindings, inspect the assigned local host ports with:
+
+`docker compose port web 80`
+
+`docker compose port api 9000`
+
+Then visit the reported web URL in a browser and `curl` the reported API URL. `GET /` on the API should return server info JSON, and the web app Settings screen should be able to test its connection against the configured API URL.
+
 ## Repository layout
 
 This monorepo includes source code for the API, frontend, and related packages:

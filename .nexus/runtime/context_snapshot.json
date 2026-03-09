@@ -3,11 +3,11 @@
   "agentPendingPermissions" : 0,
   "agentStatus" : "OpenCode 1.2.18",
   "browserConsoleErrors" : [
-
+    "A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:\n\n- A server\/client branch `if (typeof window !== 'undefined')`.\n- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.\n- Date formatting in a user's locale which doesn't match the server.\n- External changing data without sending a snapshot of it along with the HTML.\n- Invalid HTML tag nesting.\n\nIt can also happen if the client has a browser extension installed which messes with the HTML before React loaded.\n\n%s%s https:\/\/react.dev\/link\/hydration-mismatch \n\n  ...\n    <WorkspaceSection>\n      <section className=\"phase work...\" id=\"workspace\">\n        <div>\n        <div className=\"workspace-...\">\n          <div>\n          <div className=\"workspace-...\" role=\"tabpanel\">\n            <ForgeBuilderTool toolId=\"forge\" input={{type:\"text\", ...}}>\n              <section className=\"ForgeBuild...\">\n                <header>\n                <div>\n                <div className=\"ForgeBuild...\" data-sidebar=\"open\" data-inspector=\"closed\">\n                  <aside>\n                  <main className=\"ForgeBuild...\">\n                    <div ref={{current:null}} className=\"ForgeBuild...\" onWheel={function onCanvasWheel} ...>\n                      <button>\n                      <div className=\"ForgeBuild...\" style={{...}}>\n                        <svg>\n                        <article className={\"ForgeBui...\"} style={{left:80,top:180}} data-pan-ignore=\"true\" ...>\n                          <header>\n                          <div className=\"ForgeBuild...\">\n                            <div>\n                            <div className=\"ForgeBuild...\">\n                              <button\n                                type=\"button\"\n                                className={\"ForgeBuilderTool-module__vOMj9W__port \"}\n                                style={{top:12}}\n                                data-pan-ignore=\"true\"\n                                data-forge-output-port=\"true\"\n+                               data-node-id=\"node-5ebda661\"\n-                               data-node-id=\"node-c4bd8e51\"\n                                data-port-id=\"out\"\n                                onMouseDown={function onMouseDown}\n                                onClick={function onClick}\n                                title=\"out:out (any)\"\n                              >\n+                               out\n                          ...\n                        <article className={\"ForgeBui...\"} style={{left:360,top:180}} data-pan-ignore=\"true\" ...>\n                          <header>\n                          <div className=\"ForgeBuild...\">\n                            <div className=\"ForgeBuild...\">\n                              <button\n                                type=\"button\"\n                                className=\"ForgeBuilderTool-module__vOMj9W__port\"\n                                style={{top:12}}\n                                data-pan-ignore=\"true\"\n                                data-forge-input-port=\"true\"\n+                               data-node-id=\"node-75cb2dbc\"\n-                               data-node-id=\"node-42dd4c82\"\n                                data-port-id=\"in\"\n                                onClick={function onClick}\n                                title=\"in:in (text | json)\"\n                              >\n+                               in\n                            <div className=\"ForgeBuild...\">\n                              <button\n                                type=\"button\"\n                                className={\"ForgeBuilderTool-module__vOMj9W__port \"}\n                                style={{top:12}}\n                                data-pan-ignore=\"true\"\n                                data-forge-output-port=\"true\"\n+                               data-node-id=\"node-75cb2dbc\"\n-                               data-node-id=\"node-42dd4c82\"\n                                data-port-id=\"out\"\n                                onMouseDown={function onMouseDown}\n                                onClick={function onClick}\n                                title=\"out:out (json)\"\n                              >\n+                               out\n                          ...\n                        <article className={\"ForgeBui...\"} style={{left:640,top:180}} data-pan-ignore=\"true\" ...>\n                          <header>\n                          <div className=\"ForgeBuild...\">\n                            <div className=\"ForgeBuild...\">\n                              <button\n                                type=\"button\"\n                                className=\"ForgeBuilderTool-module__vOMj9W__port\"\n                                style={{top:12}}\n                                data-pan-ignore=\"true\"\n                                data-forge-input-port=\"true\"\n+                               data-node-id=\"node-83093d7c\"\n-                               data-node-id=\"node-455ad62b\"\n                                data-port-id=\"in\"\n                                onClick={function onClick}\n                                title=\"in:in (any)\"\n                              >\n+                               in\n                            ...\n                          ...\n                      ...\n                    ...\n"
   ],
-  "browserPageTitle" : "I like aniem - Google Search",
+  "browserPageTitle" : "Axor Portfolio",
   "browserURL" : "https:\/\/www.google.com\/search?hl=en-PR&source=hp&biw=&bih=&q=I+like+aniem&iflsig=AFdpzrgAAAAAaazgVnuWXcqUS6xpSGWbaF7Meba2xPAr&gbv=2&oq=I+like+aniem&gs_l=heirloom-hp.3..0i512i13l6j0i22i30j0i22i10i30j0i22i30l2.1557.2763.0.3044.12.11.0.0.0.0.200.933.6j4j1.11.0....0...1.1.34.heirloom-hp..4.8.453.ov-BD9kcOsE",
-  "capturedAt" : 794636768.519509,
+  "capturedAt" : 794716633.091174,
   "currentDirectory" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/",
   "environmentVars" : {
 
@@ -109,8 +109,8 @@
   "gitStagedFiles" : [
 
   ],
-  "lastCommandOutput" : "",
-  "lastExitCode" : 130,
+  "lastCommandOutput" : "   ⠇ p-e-w\/gpt-oss-20b-heretic-ara-v3 - Resolving...\n\n⠸ Resolving download plan...\nError: Failed to resolve artifact \"p-e-w\/gpt-oss-20b-heretic-ara-v3\": The artifact does not exist or you do not have permission to read it\n    at downloadArtifact (\/$bunfs\/root\/lms:117555:109)\n    at downloadArtifact (\/$bunfs\/root\/lms:117504:33)\n    at <anonymous> (\/$bunfs\/root\/lms:117053:29)\n    at processTicksAndRejections (native:7:39)\n",
+  "lastExitCode" : 256,
   "latticeNodes" : {
 
   },
@@ -124,6 +124,12 @@
     "totalTasks" : 0
   },
   "recentCommands" : [
+    {
+      "command" : "lms get p-e-w\/gpt-oss-20b-heretic-ara-v3",
+      "exitCode" : 256,
+      "output" : "   ⠇ p-e-w\/gpt-oss-20b-heretic-ara-v3 - Resolving...\n\n⠸ Resolving download plan...\nError: Failed to resolve artifact \"p-e-w\/gpt-oss-20b-heretic-ara-v3\": The artifact does not exist or you do not have permission to read it\n    at downloadArtifact (\/$bunfs\/root\/lms:117555:109)\n    at downloadArtifact (\/$bunfs\/root\/lms:117504:33)\n    at <anonymous> (\/$bunfs\/root\/lms:117053:29)\n    at processTicksAndRejections (native:7:39)\n",
+      "timestamp" : 794636782.870751
+    },
     {
       "command" : "clear",
       "exitCode" : 130,

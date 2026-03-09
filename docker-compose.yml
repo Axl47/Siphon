@@ -1,0 +1,72 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: deploy/dokploy/web.Dockerfile
+      args:
+        SIPHON_DEFAULT_API_URL: ${SIPHON_DEFAULT_API_URL:?SIPHON_DEFAULT_API_URL is required}
+        SIPHON_HOST: ${SIPHON_HOST:?SIPHON_HOST is required}
+    depends_on:
+      api:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    init: true
+    ports:
+      - "80"
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: deploy/dokploy/api.Dockerfile
+    environment:
+      API_URL: ${API_URL:?API_URL is required}
+      API_PORT: "9000"
+      CORS_WILDCARD: "${CORS_WILDCARD:-0}"
+      CORS_URL: ${CORS_URL:?CORS_URL is required}
+      API_AUTH_REQUIRED: "${API_AUTH_REQUIRED:-1}"
+      API_KEY_URL: ${API_KEY_URL:-file:///run/secrets/siphon-keys.json}
+      COOKIE_PATH: ${COOKIE_PATH:-}
+      TURNSTILE_SITEKEY: ${TURNSTILE_SITEKEY:-}
+      TURNSTILE_SECRET: ${TURNSTILE_SECRET:-}
+      JWT_SECRET: ${JWT_SECRET:-}
+      JWT_EXPIRY: ${JWT_EXPIRY:-}
+      RATELIMIT_WINDOW: ${RATELIMIT_WINDOW:-}
+      RATELIMIT_MAX: ${RATELIMIT_MAX:-}
+      SESSION_RATELIMIT_WINDOW: ${SESSION_RATELIMIT_WINDOW:-}
+      SESSION_RATELIMIT_MAX: ${SESSION_RATELIMIT_MAX:-}
+      TUNNEL_RATELIMIT_WINDOW: ${TUNNEL_RATELIMIT_WINDOW:-}
+      TUNNEL_RATELIMIT_MAX: ${TUNNEL_RATELIMIT_MAX:-}
+      DURATION_LIMIT: ${DURATION_LIMIT:-}
+      DISABLED_SERVICES: ${DISABLED_SERVICES:-}
+      FORCE_LOCAL_PROCESSING: ${FORCE_LOCAL_PROCESSING:-}
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      NO_PROXY: ${NO_PROXY:-}
+      CUSTOM_INNERTUBE_CLIENT: ${CUSTOM_INNERTUBE_CLIENT:-}
+      YOUTUBE_GENERATE_PO_TOKENS: ${YOUTUBE_GENERATE_PO_TOKENS:-1}
+      YOUTUBE_SESSION_SERVER: ${YOUTUBE_SESSION_SERVER:-}
+      YOUTUBE_SESSION_INNERTUBE_CLIENT: ${YOUTUBE_SESSION_INNERTUBE_CLIENT:-}
+      YOUTUBE_PLAYER_ID: ${YOUTUBE_PLAYER_ID:-}
+      ENABLE_DEPRECATED_YOUTUBE_HLS: ${ENABLE_DEPRECATED_YOUTUBE_HLS:-}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:9000/').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    init: true
+    ports:
+      - "9000"
+    restart: unless-stopped

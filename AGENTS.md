@@ -22,6 +22,10 @@ Whenever new updates are made, this file (`AGENTS.md`) should be updated with an
 
 - `web/src/lib/siphon/history.ts` is the durable memory layer, not just the recent/history query helper. Each successful download already stores its sidecar payload inside IndexedDB via `DownloadRecord.sidecar`, and aggregate export now comes from `buildMemoryExport()` / `exportMemoryArchive()`. Use this file when adding stats, backups, or future “memory” features instead of creating a second storage path.
 
+- `deploy/dokploy/` is the supported container deployment path for this fork. Use `deploy/dokploy/web.Dockerfile`, `deploy/dokploy/api.Dockerfile`, and `deploy/dokploy/nginx.conf` for Dokploy or any split web/API deployment; do not extend the old root `Dockerfile` unless you intentionally want the legacy API-only image.
+
+- The root `docker-compose.yml` is designed for Dokploy UI-managed domains and mounted files. It publishes service ports without fixed host bindings so Dokploy can attach domains cleanly, and local validation should use `docker compose port web 80` / `docker compose port api 9000` to discover the assigned host ports.
+
 ## Sub Agents
 
 Use sub-agents where appropriate to break down complex changes into manageable pieces, and to allow for more focused implementation and testing. For example, if implementing a new feature that requires both backend and frontend changes, you might create separate sub-agents for each layer of the stack, but before then use an exploring agent (or multiple) to get context on the codebase and research the best approaches for the feature, outline the specific steps needed for implementation into a final exec plan, and spin up task subagents that handle the implementation. This allows for more efficient development and testing, as each sub-agent can focus on a specific aspect of the implementation, and can be tested independently before being integrated into the larger codebase.
