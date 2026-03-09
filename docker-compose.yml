@@ -10,7 +10,8 @@ services:
       api:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3005/ || exit 1"]
+      test:
+        ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3005/ || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -69,6 +70,7 @@ services:
     init: true
     volumes:
       - /home/axor/.private/siphon-keys.json:/run/secrets/siphon-keys.json:ro
+      - /home/axor/.private/cookies.json:/run/secrets/cookies.json:ro
     ports:
       - "9000"
     restart: unless-stopped
