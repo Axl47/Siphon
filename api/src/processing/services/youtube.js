@@ -46,6 +46,10 @@ const hlsCodecList = {
 }
 
 const clientsWithNoCipher = ['IOS', 'ANDROID', 'YTSTUDIO_ANDROID', 'YTMUSIC_ANDROID'];
+const clientFallbackOrder = {
+    video: ['ANDROID', 'MWEB', 'TV_EMBEDDED'],
+    audio: ['YTMUSIC_ANDROID', 'ANDROID', 'MWEB'],
+};
 
 const videoQualities = [144, 240, 360, 480, 720, 1080, 1440, 2160, 4320];
 const youtubeRangeProbeHeaders = {
@@ -61,6 +65,41 @@ const youtubeRangeProbeWindow = {
 };
 
 let unavailableResponses = 0;
+
+const getRetryTrail = (o, currentClient) => [
+    ...(Array.isArray(o.innertubeClientRetryTrail) ? o.innertubeClientRetryTrail : []),
+    currentClient,
+].filter(Boolean);
+
+const getFallbackInnertubeClient = ({ currentClient, isAudioOnly, retryTrail }) => {
+    const candidates = isAudioOnly ? clientFallbackOrder.audio : clientFallbackOrder.video;
+    const attempted = new Set(retryTrail);
+    return candidates.find(candidate => !attempted.has(candidate) && candidate !== currentClient) || null;
+};
+
+const retryWithFallbackClient = async ({ o, currentClient, reason }) => {
+    const retryTrail = getRetryTrail(o, currentClient);
+    const fallbackClient = getFallbackInnertubeClient({
+        currentClient,
+        isAudioOnly: !!o.isAudioOnly,
+        retryTrail,
+    });
+
+    if (!fallbackClient) {
+        return null;
+    }
+
+    console.warn(
+        new Date(),
+        `Retrying YouTube request with ${fallbackClient} after ${reason} (previous client: ${currentClient}).`
+    );
+
+    return youtubeService({
+        ...o,
+        innertubeClient: fallbackClient,
+        innertubeClientRetryTrail: retryTrail,
+    });
+};
 
 // https://ytjs.dev/guide/getting-started.html#providing-a-custom-javascript-interpreter
 const youtubeEval = async (data, env) => {
@@ -106,7 +145,7 @@ const fetchEncryptedHostFlags = async (fetch) => {
  */
 let poModule;
 
-const cloneInnertube = async (customFetch, useSession) => {
+const cloneInnertube = async (customFetch, useSession, skipYouTubeCookie = false) => {
     Platform.shim.eval = youtubeEval;
 
     if (env.ytGeneratePoTokens) {
@@ -127,7 +166,7 @@ const cloneInnertube = async (customFetch, useSession) => {
 
     const shouldRefreshPlayer = globalThis.FORCE_RESET_INNERTUBE_PLAYER || lastRefreshedAt + PLAYER_REFRESH_PERIOD < new Date();
 
-    const rawCookie = getCookie('youtube');
+    const rawCookie = skipYouTubeCookie ? undefined : getCookie('youtube');
     const cookie = rawCookie?.toString();
 
     const sessionTokens = getYouTubeSession();
@@ -407,7 +446,8 @@ export default async function youtubeService(o) {
                 ...init,
                 dispatcher: o.dispatcher
             }),
-            useCurrentSession
+            useCurrentSession,
+            o.skipYouTubeCookie === true
         );
 
     try {
@@ -461,6 +501,27 @@ export default async function youtubeService(o) {
 
         info = await yt.actions.execute("/player", args);
     } catch (e) {
+        if (!o.skipYouTubeCookie && env.cookiePath) {
+            console.warn(new Date(), `Retrying YouTube /player without cookies for ${o.id || o.postId || "unknown target"}.`);
+            const cookielessAttempt = await youtubeService({
+                ...o,
+                skipYouTubeCookie: true,
+            });
+
+            if (!cookielessAttempt?.error || cookielessAttempt.error !== "fetch.fail") {
+                return cookielessAttempt;
+            }
+        }
+
+        const fallbackClientAttempt = await retryWithFallbackClient({
+            o,
+            currentClient: innertubeClient,
+            reason: "fetch.fail",
+        });
+        if (fallbackClientAttempt) {
+            return fallbackClientAttempt;
+        }
+
         if (e?.info) {
             let errorInfo;
             try { errorInfo = JSON.parse(e?.info); } catch {}
@@ -488,6 +549,14 @@ export default async function youtubeService(o) {
     switch (playability.status) {
         case "LOGIN_REQUIRED":
             if (playability.reason.endsWith("bot")) {
+                const fallbackClientAttempt = await retryWithFallbackClient({
+                    o,
+                    currentClient: innertubeClient,
+                    reason: "youtube.login",
+                });
+                if (fallbackClientAttempt) {
+                    return fallbackClientAttempt;
+                }
                 lastRefreshedAt = +new Date(0);
                 return { error: "youtube.login", retry: true }
             }
@@ -504,6 +573,14 @@ export default async function youtubeService(o) {
                 return { error: "fetch.rate" }
             }
             if (playability?.reason?.endsWith("bot")) {
+                const fallbackClientAttempt = await retryWithFallbackClient({
+                    o,
+                    currentClient: innertubeClient,
+                    reason: "youtube.login",
+                });
+                if (fallbackClientAttempt) {
+                    return fallbackClientAttempt;
+                }
                 lastRefreshedAt = +new Date(0);
                 return { error: "youtube.login", retry: true }
             }

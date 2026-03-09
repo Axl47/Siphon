@@ -36,6 +36,10 @@ Whenever new updates are made, this file (`AGENTS.md`) should be updated with an
 
 - `yt-session-generator` returns `503` on `/token` until it has actually produced a token. The Dokploy healthcheck therefore targets `/update` and the API uses `depends_on: service_healthy`; otherwise the API can start too early and log a misleading `ECONNREFUSED` against `yt-session-generator:8080`.
 
+- Public YouTube requests can behave worse on VPS IPs when browser-exported YouTube cookies are enabled. The service now retries `/player` once without YouTube cookies after a `fetch.fail`, so public videos can still work even if mounted cookies are too “hot” for the datacenter IP.
+
+- For hosted YouTube failures that still return `youtube.login` or `fetch.fail`, the YouTube service now retries with alternate Innertube clients (`ANDROID`, `MWEB`, `TV_EMBEDDED`, and `YTMUSIC_ANDROID` for audio-first cases) before surfacing the final API error. This makes the retry loop materially different instead of replaying the same `IOS` client request.
+
 ## Sub Agents
 
 Use sub-agents where appropriate to break down complex changes into manageable pieces, and to allow for more focused implementation and testing. For example, if implementing a new feature that requires both backend and frontend changes, you might create separate sub-agents for each layer of the stack, but before then use an exploring agent (or multiple) to get context on the codebase and research the best approaches for the feature, outline the specific steps needed for implementation into a final exec plan, and spin up task subagents that handle the implementation. This allows for more efficient development and testing, as each sub-agent can focus on a specific aspect of the implementation, and can be tested independently before being integrated into the larger codebase.
