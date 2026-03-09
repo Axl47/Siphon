@@ -113,6 +113,7 @@ const retryWithFallbackClient = async ({ o, currentClient, reason }) => {
 
     return youtubeService({
         ...o,
+        forceSessionAttempt: false,
         innertubeClient: fallbackClient,
         innertubeClientRetryTrail: retryTrail,
     });

@@ -24,6 +24,7 @@ After this change, Siphon can be deployed to Dokploy as a single Docker Compose 
 - [x] (2026-03-09 18:50Z) Hardened the browserless helper startup by launching the token worker with an explicit `--max-old-space-size` argv, switching readiness to `/token`, and adding a request-time API fetch path so hosted YouTube recovers as soon as the helper produces its first token.
 - [x] (2026-03-09 19:25Z) Fixed the YouTube session-backed retry path to rebuild the cached Innertube context when switching from public IOS requests to session-backed WEB_EMBEDDED requests, instead of reusing stale visitor/client state.
 - [x] (2026-03-09 19:45Z) Taught the session-backed WEB_EMBEDDED path to fetch `encryptedHostFlags` lazily before `/player` requests, matching the requirement the code already knew about for the older public WEB_EMBEDDED flow.
+- [x] (2026-03-09 19:55Z) Fixed a hosted YouTube retry loop where fallback clients such as `ANDROID` were still inheriting `forceSessionAttempt`, causing them to be coerced back into `WEB_EMBEDDED` and spam retries instead of actually changing client.
 - [ ] Run full `docker compose build` / `docker compose up` validation once Docker is available on the host. Completed: `docker compose config`; remaining: actual image build and container launch through Docker.
 
 ## Surprises & Discoveries
@@ -66,6 +67,9 @@ After this change, Siphon can be deployed to Dokploy as a single Docker Compose 
 
 - Observation: the code already knew WEB_EMBEDDED sometimes needed `encryptedHostFlags`, but it only fetched those flags for the older non-session WEB_EMBEDDED path.
   Evidence: `api/src/processing/services/youtube.js` only populated `encryptedHostFlags` behind `!useSession && env.customInnertubeClient === "WEB_EMBEDDED"` even though later `/player` requests also attach that field for session-backed WEB_EMBEDDED requests when available.
+
+- Observation: the fallback retry path can accidentally preserve `forceSessionAttempt` from a prior session-backed retry, which makes “Retrying ... ANDROID” logs misleading because the request still resolves back to the session client.
+  Evidence: API logs showed dozens of repeated `Retrying YouTube request with ANDROID after youtube.login (previous client: WEB_EMBEDDED)` lines until the request was manually stopped, which is only possible if the fallback never truly exits the forced session path.
 
 ## Decision Log
 
