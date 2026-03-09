@@ -1,13 +1,12 @@
 import http from "node:http";
+import { spawn } from "node:child_process";
 import process from "node:process";
-import { createRequire } from "node:module";
-
-const require = createRequire(import.meta.url);
-const { generate } = require("youtube-po-token-generator");
+import { fileURLToPath } from "node:url";
 
 const bindAddress = process.env.YT_SESSION_BIND || "0.0.0.0";
 const port = Number(process.env.YT_SESSION_PORT || "8080");
 const updateIntervalSeconds = Math.max(60, Number(process.env.YT_SESSION_UPDATE_INTERVAL || "300"));
+const workerPath = fileURLToPath(new URL("./worker.mjs", import.meta.url));
 
 let tokenInfo = null;
 let updatePromise = null;
@@ -40,7 +39,39 @@ const refreshToken = async (reason = "scheduled") => {
     updatePromise = (async () => {
         logInfo(`update started (${reason})`);
         try {
-            const token = await generate();
+            const token = await new Promise((resolve, reject) => {
+                const child = spawn(process.execPath, [workerPath], {
+                    env: process.env,
+                    stdio: ["ignore", "pipe", "pipe"],
+                });
+
+                let stdout = "";
+                let stderr = "";
+
+                child.stdout.on("data", (chunk) => {
+                    stdout += chunk.toString();
+                });
+
+                child.stderr.on("data", (chunk) => {
+                    stderr += chunk.toString();
+                });
+
+                child.on("error", reject);
+
+                child.on("close", (code) => {
+                    if (code !== 0) {
+                        const detail = stderr.trim() || stdout.trim() || `worker exited with code ${code}`;
+                        reject(new Error(detail));
+                        return;
+                    }
+
+                    try {
+                        resolve(JSON.parse(stdout));
+                    } catch {
+                        reject(new Error(`worker returned invalid JSON: ${stdout.trim()}`));
+                    }
+                });
+            });
             tokenInfo = createTokenPayload(token);
             lastError = null;
             logInfo("update was successful");

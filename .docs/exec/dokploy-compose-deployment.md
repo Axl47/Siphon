@@ -20,6 +20,7 @@ After this change, Siphon can be deployed to Dokploy as a single Docker Compose 
 - [x] (2026-03-09 15:20Z) Replaced the stock `yt-session-generator` image with a tiny Dokploy wrapper image that patches nodriver startup to use `no_sandbox=True`, based on VPS logs showing Chromium failing to connect when launched as root.
 - [x] (2026-03-09 15:55Z) Switched `YOUTUBE_SESSION_SERVER` interpolation from `${VAR:-default}` to `${VAR-default}` so Dokploy users can disable the session server by setting an explicit empty value during troubleshooting.
 - [x] (2026-03-09 16:10Z) Changed the session-generator healthcheck to `/update` and made the API depend on `service_healthy` so the API does not race the helper server's startup and emit a misleading `ECONNREFUSED`.
+- [x] (2026-03-09 16:50Z) Replaced the Chromium-based `yt-session-generator` wrapper with a browserless Node workspace package (`packages/yt-session-service`) that generates `{ visitorData, poToken }` directly and exposes `/token`, `/update`, and `/health`.
 - [ ] Run full `docker compose build` / `docker compose up` validation once Docker is available on the host. Completed: `docker compose config`; remaining: actual image build and container launch through Docker.
 
 ## Surprises & Discoveries
@@ -47,6 +48,9 @@ After this change, Siphon can be deployed to Dokploy as a single Docker Compose 
 
 - Observation: for hosted YouTube, cookies alone may still degrade from `youtube.login` into `fetch.fail` on VPS IPs. The repo already supports an external `yt-session-generator`, and the deployment path is more reliable when that service is present by default.
   Evidence: `docs/examples/docker-compose.example.yml` already includes a commented `yt-session-generator` service, and `api/src/processing/helpers/youtube-session.js` expects `YOUTUBE_SESSION_SERVER` to supply `poToken` and `visitor_data`.
+
+- Observation: the browser-based `yt-session-generator` could start Chromium but still fail to generate a token on the VPS, consistently stalling at `timeout waiting for outgoing API request`. A browserless generator that returns `{ visitorData, poToken }` directly is both simpler to deploy and more responsive under container health checks.
+  Evidence: local validation of `packages/yt-session-service/server.mjs` returned a valid `/token` response immediately, while the old wrapper image never moved past `503 Token has not yet been generated` in the same hosted workflow.
 
 ## Decision Log
 
@@ -82,7 +86,7 @@ Next, create the `deploy/dokploy/` directory. The web Dockerfile will use a Node
 
 Then create the API Dockerfile. It should build from the monorepo root using Node 20, install the system packages needed by native dependencies and ffmpeg-related modules, and use `pnpm deploy --filter=@imput/cobalt-api --prod` to copy the API runtime into a clean final image. The final stage should run as the `node` user, expose port `9000`, and start the existing API entrypoint with `node src/cobalt`.
 
-Add a third Compose service named `yt-session-generator`, built from `deploy/dokploy/yt-session-generator.Dockerfile`. That wrapper image extends `ghcr.io/imputnet/yt-session-generator:webserver`, patches the upstream extractor to call nodriver with `no_sandbox=True`, and preserves the image’s internal `8080` listener. If you need a different host port, map it as `HOST:8080`. The API service should depend on it and default `YOUTUBE_SESSION_SERVER` to `http://yt-session-generator:8080/` with `YOUTUBE_SESSION_INNERTUBE_CLIENT=WEB_EMBEDDED` unless the deployer overrides those values. This keeps hosted YouTube behavior aligned with the repository’s documented advanced setup and avoids the root-container Chromium crash seen on some VPS providers.
+Add a third Compose service named `yt-session-generator`, built from `deploy/dokploy/yt-session-generator.Dockerfile`. That image should build and deploy the workspace package `packages/yt-session-service`, which serves `/token`, `/update`, and `/health` and generates `{ visitorData, poToken }` directly in a Node worker process instead of launching Chromium. The API service should depend on it and default `YOUTUBE_SESSION_SERVER` to `http://yt-session-generator:8080/` with `YOUTUBE_SESSION_INNERTUBE_CLIENT=WEB_EMBEDDED` unless the deployer overrides those values. This keeps hosted YouTube behavior aligned with the repository’s documented advanced setup without relying on a brittle headless-browser sidecar.
 
 After the container assets exist, update the human-facing documentation. Add a deployment section to the repository README that explains the Dokploy topology, required variables, and required mounted files. Add a dedicated section or example that names the exact Dokploy variables a user must define and which domains to attach in the Dokploy UI. Update `AGENTS.md` with short notes that explain why the Dokploy deployment does not use the old root Dockerfile and where the deployment assets live.
 
@@ -171,7 +175,7 @@ At the end of this work, these deployment interfaces must exist:
       ARG SIPHON_HOST
 
 - `deploy/dokploy/api.Dockerfile` that produces a runtime image for `@imput/cobalt-api`.
-- `deploy/dokploy/yt-session-generator.Dockerfile` that wraps the upstream session-generator image and patches nodriver startup for container-safe Chromium launch.
+- `deploy/dokploy/yt-session-generator.Dockerfile` that builds and deploys the workspace package `@siphon/yt-session-service`.
 - `deploy/dokploy/nginx.conf` that defines SPA/static serving and cache headers.
 - A documented Dokploy variable contract including:
 

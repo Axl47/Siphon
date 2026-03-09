@@ -28,13 +28,15 @@ Whenever new updates are made, this file (`AGENTS.md`) should be updated with an
 
 - Hosted YouTube is more brittle from VPS and datacenter IPs than from local development. The Dokploy compose now includes `yt-session-generator` and defaults `YOUTUBE_SESSION_SERVER` to `http://yt-session-generator:8080/` plus `YOUTUBE_SESSION_INNERTUBE_CLIENT=WEB_EMBEDDED`; treat that as the baseline hosted YouTube configuration before reaching for more cookie tweaks.
 
-- `ghcr.io/imputnet/yt-session-generator:webserver` listens on port `8080` inside the container. If you need a different host port, map it as `HOST:8080` but keep `YOUTUBE_SESSION_SERVER` pointed at the internal `:8080` service URL for container-to-container traffic.
+- `yt-session-generator` now comes from the workspace package `packages/yt-session-service`, not the upstream Chromium-based image. It serves the same `/token` and `/update` contract the API expects, but generates `{ visitorData, poToken }` in a Node worker process so the helper stays responsive while a token refresh is running.
 
-- The stock `ghcr.io/imputnet/yt-session-generator:webserver` image launches Chromium as root and can fail on some VPS/container runtimes with `Failed to connect to browser` unless `no_sandbox=True` is passed to nodriver. The Dokploy path wraps that image in `deploy/dokploy/yt-session-generator.Dockerfile` and patches the upstream extractor instead of relying on runtime flags that the image does not expose.
+- The Dokploy `yt-session-generator` build now depends on the workspace lockfile because it installs `packages/yt-session-service` with pnpm and deploys only that package into the final image. If Dokploy reports a missing dependency during that build, check that `pnpm-lock.yaml` and `packages/yt-session-service/package.json` were both deployed together.
+
+- The Dokploy Compose file forwards `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, and `YT_SESSION_UPDATE_INTERVAL` into `yt-session-generator`. If a hosted YouTube fix involves routing traffic through a proxy, make sure the helper service gets the same proxy envs as the API or the token path and media path will behave differently.
 
 - In Dokploy Compose interpolation, `${VAR:-default}` makes an empty string fall back to the default. The deployment uses `${YOUTUBE_SESSION_SERVER-default}` instead so setting `YOUTUBE_SESSION_SERVER` to `""` actually disables the session generator for debugging.
 
-- `yt-session-generator` returns `503` on `/token` until it has actually produced a token. The Dokploy healthcheck therefore targets `/update` and the API uses `depends_on: service_healthy`; otherwise the API can start too early and log a misleading `ECONNREFUSED` against `yt-session-generator:8080`.
+- `yt-session-generator` returns `503` on `/token` until it has actually produced a token. The Dokploy healthcheck therefore targets `/health` and the API uses `depends_on: service_healthy`; otherwise the API can start too early and log a misleading `ECONNREFUSED` against `yt-session-generator:8080`.
 
 - Public YouTube requests can behave worse on VPS IPs when browser-exported YouTube cookies are enabled. The service now retries `/player` once without YouTube cookies after a `fetch.fail`, so public videos can still work even if mounted cookies are too “hot” for the datacenter IP.
 

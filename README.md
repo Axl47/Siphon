@@ -30,7 +30,7 @@ Siphon now includes a Dokploy-ready Docker Compose deployment at [`docker-compos
 
 - `web`: a static SvelteKit build served by nginx on container port `3005`
 - `api`: the cobalt-compatible processing API on container port `9000`
-- `yt-session-generator`: a helper service for hosted YouTube `poToken` and `visitor_data`, built from [`deploy/dokploy/yt-session-generator.Dockerfile`](deploy/dokploy/yt-session-generator.Dockerfile) so Chromium runs with the container-safe `no_sandbox` setting; it is exposed on host port `3006` and listens on internal container port `8080`
+- `yt-session-generator`: a helper service for hosted YouTube `poToken` and `visitor_data`, built from [`deploy/dokploy/yt-session-generator.Dockerfile`](deploy/dokploy/yt-session-generator.Dockerfile) and backed by the workspace package [`packages/yt-session-service`](packages/yt-session-service); it is exposed on host port `3006` and listens on internal container port `8080`
 
 The Dokploy-specific container assets live under [`deploy/dokploy/`](deploy/dokploy/). This path is separate from the old root [`Dockerfile`](Dockerfile), which remains an API-only image and is not the recommended Dokploy path.
 
@@ -68,7 +68,9 @@ This is the recommended default for VPS or datacenter deployments where YouTube 
 
 If you need to disable the session generator for troubleshooting, set `YOUTUBE_SESSION_SERVER` to an explicit empty string in Dokploy. The Compose file uses unset-only interpolation so a blank value really disables it.
 
-The Compose stack also waits for the session generator's webserver healthcheck on `/update` before starting the API. That avoids a startup race where the API tries `yt-session-generator:8080` before the helper server is listening.
+The replacement helper is browserless: it generates the `{ visitorData, poToken }` pair in a Node worker process instead of driving Chromium in Xvfb. The Compose stack waits for the helper's `/health` endpoint before starting the API.
+
+If your hosted YouTube path needs an outbound proxy, set `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` in Dokploy. Those values now flow to both the API and `yt-session-generator`. You can also tune the helper refresh cadence with `YT_SESSION_UPDATE_INTERVAL` in seconds.
 
 ### Dokploy domains
 
