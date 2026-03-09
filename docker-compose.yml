@@ -79,7 +79,9 @@ services:
     restart: unless-stopped
 
   yt-session-generator:
-    image: ghcr.io/imputnet/yt-session-generator:webserver
+    build:
+      context: .
+      dockerfile: deploy/dokploy/yt-session-generator.Dockerfile
     hostname: yt-session-generator
     healthcheck:
       test:
@@ -96,6 +98,7 @@ services:
       retries: 3
       start_period: 20s
     init: true
+    shm_size: "1gb"
     expose:
       - "8080"
     networks:

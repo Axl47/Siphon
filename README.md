@@ -30,7 +30,7 @@ Siphon now includes a Dokploy-ready Docker Compose deployment at [`docker-compos
 
 - `web`: a static SvelteKit build served by nginx on container port `3005`
 - `api`: the cobalt-compatible processing API on container port `9000`
-- `yt-session-generator`: a helper service for hosted YouTube `poToken` and `visitor_data`, exposed on host port `3006` and listening on internal container port `8080`
+- `yt-session-generator`: a helper service for hosted YouTube `poToken` and `visitor_data`, built from [`deploy/dokploy/yt-session-generator.Dockerfile`](deploy/dokploy/yt-session-generator.Dockerfile) so Chromium runs with the container-safe `no_sandbox` setting; it is exposed on host port `3006` and listens on internal container port `8080`
 
 The Dokploy-specific container assets live under [`deploy/dokploy/`](deploy/dokploy/). This path is separate from the old root [`Dockerfile`](Dockerfile), which remains an API-only image and is not the recommended Dokploy path.
 
