@@ -4,19 +4,25 @@ FROM ghcr.io/imputnet/yt-session-generator:webserver
 # to disable the sandbox so token extraction works in containerized VPS deployments.
 RUN python - <<'PY'
 from pathlib import Path
+import re
 
 path = Path("/app/potoken_generator/extractor.py")
 text = path.read_text()
-old = """            browser = await nodriver.start(headless=False,
-                browser_executable_path=self.browser_path,
-                user_data_dir=self.profile_path)"""
-new = """            browser = await nodriver.start(headless=False,
-                no_sandbox=True,
-                browser_executable_path=self.browser_path,
-                user_data_dir=self.profile_path)"""
 
-if old not in text:
-    raise SystemExit("expected nodriver.start block not found in extractor.py")
+pattern = re.compile(
+    r"(browser = await nodriver\.start\(headless=False,\n)"
+    r"(\s+)(?!no_sandbox=True,)(browser_executable_path=self\.browser_path,\n)"
+    r"(\s+)(user_data_dir=self\.profile_path\))"
+)
 
-path.write_text(text.replace(old, new, 1))
+updated, count = pattern.subn(
+    r"\1\2no_sandbox=True,\n\2\3\4\5",
+    text,
+    count=1,
+)
+
+if count != 1:
+    raise SystemExit("expected nodriver.start block not found or already patched in extractor.py")
+
+path.write_text(updated)
 PY
