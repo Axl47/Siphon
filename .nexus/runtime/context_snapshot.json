@@ -1,0 +1,191 @@
+{
+  "activeNotePage" : "notes",
+  "agentPendingPermissions" : 0,
+  "agentStatus" : "OpenCode 1.2.18",
+  "browserConsoleErrors" : [
+
+  ],
+  "browserPageTitle" : "I like aniem - Google Search",
+  "browserURL" : "https:\/\/www.google.com\/search?hl=en-PR&source=hp&biw=&bih=&q=I+like+aniem&iflsig=AFdpzrgAAAAAaazgVnuWXcqUS6xpSGWbaF7Meba2xPAr&gbv=2&oq=I+like+aniem&gs_l=heirloom-hp.3..0i512i13l6j0i22i30j0i22i10i30j0i22i30l2.1557.2763.0.3044.12.11.0.0.0.0.200.933.6j4j1.11.0....0...1.1.34.heirloom-hp..4.8.453.ov-BD9kcOsE",
+  "capturedAt" : 794636768.519509,
+  "currentDirectory" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/",
+  "environmentVars" : {
+
+  },
+  "fileTree" : [
+    {
+      "isDirectory" : true,
+      "path" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/.docs\/"
+    },
+    {
+      "isDirectory" : true,
+      "path" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/.git\/"
+    },
+    {
+      "isDirectory" : true,
+      "path" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/.github\/"
+    },
+    {
+      "isDirectory" : true,
+      "path" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/.nexus\/"
+    },
+    {
+      "isDirectory" : true,
+      "path" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/api\/"
+    },
+    {
+      "isDirectory" : true,
+      "path" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/docs\/"
+    },
+    {
+      "isDirectory" : true,
+      "path" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/node_modules\/"
+    },
+    {
+      "isDirectory" : true,
+      "path" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/packages\/"
+    },
+    {
+      "isDirectory" : true,
+      "path" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/web\/"
+    },
+    {
+      "isDirectory" : false,
+      "path" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/.deepsource.toml"
+    },
+    {
+      "isDirectory" : false,
+      "path" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/.dockerignore"
+    },
+    {
+      "isDirectory" : false,
+      "path" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/.gitignore"
+    },
+    {
+      "isDirectory" : false,
+      "path" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/.nvmrc"
+    },
+    {
+      "isDirectory" : false,
+      "path" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/AGENTS.md"
+    },
+    {
+      "isDirectory" : false,
+      "path" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/CONTRIBUTING.md"
+    },
+    {
+      "isDirectory" : false,
+      "path" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/Dockerfile"
+    },
+    {
+      "isDirectory" : false,
+      "path" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/LICENSE"
+    },
+    {
+      "isDirectory" : false,
+      "path" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/package.json"
+    },
+    {
+      "isDirectory" : false,
+      "path" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/pnpm-lock.yaml"
+    },
+    {
+      "isDirectory" : false,
+      "path" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/pnpm-workspace.yaml"
+    },
+    {
+      "isDirectory" : false,
+      "path" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/README.md"
+    },
+    {
+      "isDirectory" : false,
+      "path" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/working_list.md"
+    }
+  ],
+  "gitBranch" : "meowing.de",
+  "gitDirtyFiles" : [
+
+  ],
+  "gitStagedFiles" : [
+
+  ],
+  "lastCommandOutput" : "",
+  "lastExitCode" : 130,
+  "latticeNodes" : {
+
+  },
+  "noteContent" : "# notes\n\nthis are some relevant notes",
+  "projectIntelligence" : {
+    "blockedTasks" : 0,
+    "doneTasks" : 0,
+    "inProgressTasks" : 0,
+    "projectName" : "Siphon",
+    "status" : "active",
+    "totalTasks" : 0
+  },
+  "recentCommands" : [
+    {
+      "command" : "clear",
+      "exitCode" : 130,
+      "output" : "",
+      "timestamp" : 794626610.335375
+    },
+    {
+      "command" : "ls",
+      "exitCode" : 130,
+      "output" : "AGENTS.md\nCONTRIBUTING.md\nDockerfile\nLICENSE\nREADME.md\napi\ndocs\nnode_modules\npackage.json\npackages\npnpm-lock.yaml\npnpm-workspace.yaml\nweb\nworking_list.md\n",
+      "timestamp" : 794626604.234143
+    },
+    {
+      "command" : "cat AGENTS.md",
+      "exitCode" : 0,
+      "output" : "# SIPHON AGENTS DOCUMENT\n\n## ExecPlans\n\nWhen writing complex features or significant refactors, use an ExecPlan (as described in `.docs\/PLANS.md`) from design to implementation. Write new plans to `.docs\/exec\/`. If inside Plan Mode, create the plan in a multiline markdown block, and write it after initiating implementation, so you can use the plan to guide your implementation and refer back to it as needed. If outside Plan Mode, you can write the plan directly and refer to it as needed.\n\n## Development Details\n\nWhenever new updates are made, this file (`AGENTS.md`) should be updated with any surprising files not apparent from the codebase that could benefit other developers. Focus on the why and when it could be useful.\n\n- `api\/src\/processing\/match.js` now exports `resolveMatchData` alongside the existing default matcher. Use it when you need raw extractor output and cobalt routing decisions without immediately collapsing the result into the legacy `tunnel`\/`redirect`\/`picker` response body. This is",
+      "timestamp" : 794626590.867889
+    },
+    {
+      "command" : "ls",
+      "exitCode" : 0,
+      "output" : "AGENTS.md\nCONTRIBUTING.md\nDockerfile\nLICENSE\nREADME.md\napi\ndocs\nnode_modules\npackage.json\n",
+      "timestamp" : 794626580.231032
+    },
+    {
+      "command" : "cd .docs\/",
+      "exitCode" : 0,
+      "output" : "",
+      "timestamp" : 794626576.045238
+    },
+    {
+      "command" : "pwd",
+      "exitCode" : 0,
+      "output" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\n",
+      "timestamp" : 794626566.888353
+    },
+    {
+      "command" : "git status",
+      "exitCode" : 0,
+      "output" : "On branch meowing.de\nYour branch is up to date with 'origin\/meowing.de'.\n\nChanges not staged for commit:\n",
+      "timestamp" : 794626560.543757
+    },
+    {
+      "command" : "sysctl -n hw.ncpu",
+      "exitCode" : 0,
+      "output" : "8\r\n",
+      "timestamp" : 794611954.989821
+    },
+    {
+      "command" : "pwd",
+      "exitCode" : 0,
+      "output" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\n",
+      "timestamp" : 794609396.290223
+    }
+  ],
+  "recentCommits" : [
+
+  ],
+  "recentlyOpenedFiles" : [
+
+  ],
+  "version" : 1,
+  "workspaceName" : "Siphon",
+  "workspaceRoot" : "\/Users\/axel\/Desktop\/Code_Projects\/Personal\/Siphon\/"
+}
