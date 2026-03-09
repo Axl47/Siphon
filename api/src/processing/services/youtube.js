@@ -364,7 +364,8 @@ export default async function youtubeService(o) {
     const quality = o.quality === "max" ? 9000 : Number(o.quality);
 
     let useHLS = o.youtubeHLS;
-    let innertubeClient = o.innertubeClient || env.customInnertubeClient || "IOS";
+    const defaultInnertubeClient = o.innertubeClient || env.customInnertubeClient || "IOS";
+    let innertubeClient = defaultInnertubeClient;
 
     // HLS playlists from the iOS client don't contain the av1 video format.
     if (useHLS && o.codec === "av1") {
@@ -400,16 +401,26 @@ export default async function youtubeService(o) {
     }
 
     let yt;
-    try {
-        yt = await cloneInnertube(
+    const createInnertube = (useCurrentSession) =>
+        cloneInnertube(
             (input, init) => fetch(input, {
                 ...init,
                 dispatcher: o.dispatcher
             }),
-            useSession
+            useCurrentSession
         );
+
+    try {
+        yt = await createInnertube(useSession);
     } catch (e) {
-        if (e === "no_session_tokens") {
+        if (e === "no_session_tokens" && useSession) {
+            // Hosted session tokens are only required for some higher-end YouTube paths.
+            // If the session server is unavailable, fall back to the non-session client so
+            // lower-quality requests and metadata lookups can still proceed.
+            useSession = false;
+            innertubeClient = useHLS ? "IOS" : defaultInnertubeClient;
+            yt = await createInnertube(false);
+        } else if (e === "no_session_tokens") {
             return { error: "youtube.no_session_tokens" };
         } else if (e.message?.endsWith("decipher algorithm")) {
             return { error: "youtube.decipher" }

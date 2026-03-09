@@ -35,10 +35,27 @@ const loadSession = async () => {
     const sessionServerUrl = new URL(env.ytSessionServer);
     sessionServerUrl.pathname = "/token";
 
-    const newSession = await fetch(
+    const response = await fetch(
         sessionServerUrl,
         { dispatcher: defaultAgent }
-    ).then(a => a.json());
+    );
+
+    const responseText = await response.text();
+
+    if (!response.ok) {
+        throw new Error(
+            `session server returned ${response.status} ${response.statusText}: ${responseText.slice(0, 200)}`
+        );
+    }
+
+    let newSession;
+    try {
+        newSession = JSON.parse(responseText);
+    } catch {
+        throw new Error(
+            `session server returned non-JSON payload: ${responseText.slice(0, 200)}`
+        );
+    }
 
     validateSession(newSession);
 
