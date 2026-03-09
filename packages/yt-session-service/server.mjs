@@ -5,7 +5,9 @@ import { fileURLToPath } from "node:url";
 
 const bindAddress = process.env.YT_SESSION_BIND || "0.0.0.0";
 const port = Number(process.env.YT_SESSION_PORT || "8080");
-const updateIntervalSeconds = Math.max(60, Number(process.env.YT_SESSION_UPDATE_INTERVAL || "300"));
+const updateIntervalSeconds = Math.max(300, Number(process.env.YT_SESSION_UPDATE_INTERVAL || "1800"));
+const retryIntervalSeconds = Math.max(30, Number(process.env.YT_SESSION_RETRY_INTERVAL || "60"));
+const workerHeapMb = Math.max(256, Number(process.env.YT_SESSION_WORKER_HEAP_MB || "3072"));
 const workerPath = fileURLToPath(new URL("./worker.mjs", import.meta.url));
 
 let tokenInfo = null;
@@ -40,8 +42,11 @@ const refreshToken = async (reason = "scheduled") => {
         logInfo(`update started (${reason})`);
         try {
             const token = await new Promise((resolve, reject) => {
-                const child = spawn(process.execPath, [workerPath], {
-                    env: process.env,
+                const childEnv = { ...process.env };
+                delete childEnv.NODE_OPTIONS;
+
+                const child = spawn(process.execPath, [`--max-old-space-size=${workerHeapMb}`, workerPath], {
+                    env: childEnv,
                     stdio: ["ignore", "pipe", "pipe"],
                 });
 
@@ -102,8 +107,8 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
 
     if (url.pathname === "/health") {
-        return writeJSON(res, 200, {
-            ok: true,
+        return writeJSON(res, tokenInfo ? 200 : 503, {
+            ok: !!tokenInfo,
             hasToken: !!tokenInfo,
             updating: !!updatePromise,
         });
@@ -131,7 +136,13 @@ const server = http.createServer(async (req, res) => {
 server.listen(port, bindAddress, () => {
     logInfo(`Starting web-server at ${bindAddress}:${port}`);
     void refreshToken("startup");
-    setInterval(() => {
-        void refreshToken("scheduled");
-    }, updateIntervalSeconds * 1000);
+
+    const scheduleNextRefresh = () => {
+        const delaySeconds = tokenInfo ? updateIntervalSeconds : retryIntervalSeconds;
+        setTimeout(() => {
+            void refreshToken(tokenInfo ? "scheduled" : "retry").finally(scheduleNextRefresh);
+        }, delaySeconds * 1000);
+    };
+
+    scheduleNextRefresh();
 });

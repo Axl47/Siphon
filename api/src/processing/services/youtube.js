@@ -6,7 +6,7 @@ import vm from 'node:vm';
 import { env, genericUserAgent } from "../../config.js";
 import { getCookie } from "../cookie/manager.js";
 import { createStream } from "../../stream/manage.js";
-import { getYouTubeSession } from "../helpers/youtube-session.js";
+import { ensureYouTubeSession, getYouTubeSession } from "../helpers/youtube-session.js";
 
 const PLAYER_REFRESH_PERIOD = 1000 * 60 * 15; // ms
 const MINTER_REFRESH_PERIOD = 1000 * 60 * 60 * 6;
@@ -75,6 +75,23 @@ const getFallbackInnertubeClient = ({ currentClient, isAudioOnly, retryTrail }) 
     const candidates = isAudioOnly ? clientFallbackOrder.audio : clientFallbackOrder.video;
     const attempted = new Set(retryTrail);
     return candidates.find(candidate => !attempted.has(candidate) && candidate !== currentClient) || null;
+};
+
+const retryWithSession = async ({ o, currentClient, reason }) => {
+    if (!env.ytSessionServer || o.forceSessionAttempt || o.youtubeHLS) {
+        return null;
+    }
+
+    console.warn(
+        new Date(),
+        `Retrying YouTube request with session-backed ${env.ytSessionInnertubeClient || "WEB_EMBEDDED"} after ${reason} (previous client: ${currentClient}).`
+    );
+
+    return youtubeService({
+        ...o,
+        forceSessionAttempt: true,
+        innertubeClientRetryTrail: getRetryTrail(o, currentClient),
+    });
 };
 
 const retryWithFallbackClient = async ({ o, currentClient, reason }) => {
@@ -182,8 +199,14 @@ const cloneInnertube = async (customFetch, useSession, skipYouTubeCookie = false
     const rawCookie = skipYouTubeCookie ? undefined : getCookie('youtube');
     const cookie = rawCookie?.toString();
 
-    const sessionTokens = getYouTubeSession();
+    let sessionTokens = getYouTubeSession();
     const retrieve_player = true;
+
+    if (useSession && env.ytSessionServer && !sessionTokens?.potoken) {
+        try {
+            sessionTokens = await ensureYouTubeSession();
+        } catch {}
+    }
 
     if (useSession && env.ytSessionServer && !sessionTokens?.potoken) {
         throw "no_session_tokens";
@@ -442,6 +465,10 @@ export default async function youtubeService(o) {
             )
         );
 
+    if (o.forceSessionAttempt && env.ytSessionServer && !useHLS) {
+        useSession = true;
+    }
+
     // we can get subtitles reliably only from the iOS client
     // if (o.subtitleLang) {
     //     innertubeClient = "IOS";
@@ -526,6 +553,15 @@ export default async function youtubeService(o) {
             }
         }
 
+        const sessionAttempt = await retryWithSession({
+            o,
+            currentClient: innertubeClient,
+            reason: "fetch.fail",
+        });
+        if (sessionAttempt) {
+            return sessionAttempt;
+        }
+
         const fallbackClientAttempt = await retryWithFallbackClient({
             o,
             currentClient: innertubeClient,
@@ -563,6 +599,15 @@ export default async function youtubeService(o) {
     switch (playability.status) {
         case "LOGIN_REQUIRED":
             if (playability.reason.endsWith("bot")) {
+                const sessionAttempt = await retryWithSession({
+                    o,
+                    currentClient: innertubeClient,
+                    reason: "youtube.login",
+                });
+                if (sessionAttempt) {
+                    return sessionAttempt;
+                }
+
                 const fallbackClientAttempt = await retryWithFallbackClient({
                     o,
                     currentClient: innertubeClient,
@@ -591,6 +636,15 @@ export default async function youtubeService(o) {
                 return { error: "fetch.rate" }
             }
             if (playability?.reason?.endsWith("bot")) {
+                const sessionAttempt = await retryWithSession({
+                    o,
+                    currentClient: innertubeClient,
+                    reason: "youtube.login",
+                });
+                if (sessionAttempt) {
+                    return sessionAttempt;
+                }
+
                 const fallbackClientAttempt = await retryWithFallbackClient({
                     o,
                     currentClient: innertubeClient,

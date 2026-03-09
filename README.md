@@ -68,9 +68,11 @@ This is the recommended default for VPS or datacenter deployments where YouTube 
 
 If you need to disable the session generator for troubleshooting, set `YOUTUBE_SESSION_SERVER` to an explicit empty string in Dokploy. The Compose file uses unset-only interpolation so a blank value really disables it.
 
-The replacement helper is browserless: it generates the `{ visitorData, poToken }` pair in a Node worker process instead of driving Chromium in Xvfb. The Compose stack waits for the helper's `/health` endpoint before starting the API.
+The replacement helper is browserless: it generates the `{ visitorData, poToken }` pair in a Node worker process instead of driving Chromium in Xvfb. The worker is launched with an explicit heap flag rather than inherited `NODE_OPTIONS`, because cold-start generation can otherwise become much less reliable on hosted containers. The Compose stack now waits for `/token` to return a real token before starting the API, retries failed startup generations every 60 seconds, and refreshes successful tokens every 30 minutes by default.
 
-If your hosted YouTube path needs an outbound proxy, set `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` in Dokploy. Those values now flow to both the API and `yt-session-generator`. You can also tune the helper refresh cadence with `YT_SESSION_UPDATE_INTERVAL` in seconds.
+The API also opportunistically fetches `/token` on demand if a YouTube request needs session data before the background 5-minute reload loop has populated its cache. That makes the hosted YouTube path recover as soon as the helper becomes ready instead of waiting for the next scheduled poll.
+
+If your hosted YouTube path needs an outbound proxy, set `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` in Dokploy. Those values now flow to both the API and `yt-session-generator`. You can also tune the helper with `YT_SESSION_UPDATE_INTERVAL`, `YT_SESSION_RETRY_INTERVAL`, and `YT_SESSION_WORKER_HEAP_MB`.
 
 ### Dokploy domains
 

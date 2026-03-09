@@ -19,8 +19,9 @@ After this change, Siphon can be deployed to Dokploy as a single Docker Compose 
 - [x] (2026-03-09 14:40Z) Added `yt-session-generator` to the Dokploy Compose stack and documented it as the default hosted YouTube mitigation.
 - [x] (2026-03-09 15:20Z) Replaced the stock `yt-session-generator` image with a tiny Dokploy wrapper image that patches nodriver startup to use `no_sandbox=True`, based on VPS logs showing Chromium failing to connect when launched as root.
 - [x] (2026-03-09 15:55Z) Switched `YOUTUBE_SESSION_SERVER` interpolation from `${VAR:-default}` to `${VAR-default}` so Dokploy users can disable the session server by setting an explicit empty value during troubleshooting.
-- [x] (2026-03-09 16:10Z) Changed the session-generator healthcheck to `/update` and made the API depend on `service_healthy` so the API does not race the helper server's startup and emit a misleading `ECONNREFUSED`.
+- [x] (2026-03-09 16:10Z) Changed the session-generator readiness strategy to token-aware health checks and made the API depend on `service_healthy` so the API does not race the helper server's startup and emit a misleading `ECONNREFUSED`.
 - [x] (2026-03-09 16:50Z) Replaced the Chromium-based `yt-session-generator` wrapper with a browserless Node workspace package (`packages/yt-session-service`) that generates `{ visitorData, poToken }` directly and exposes `/token`, `/update`, and `/health`.
+- [x] (2026-03-09 18:50Z) Hardened the browserless helper startup by launching the token worker with an explicit `--max-old-space-size` argv, switching readiness to `/token`, and adding a request-time API fetch path so hosted YouTube recovers as soon as the helper produces its first token.
 - [ ] Run full `docker compose build` / `docker compose up` validation once Docker is available on the host. Completed: `docker compose config`; remaining: actual image build and container launch through Docker.
 
 ## Surprises & Discoveries
@@ -51,6 +52,12 @@ After this change, Siphon can be deployed to Dokploy as a single Docker Compose 
 
 - Observation: the browser-based `yt-session-generator` could start Chromium but still fail to generate a token on the VPS, consistently stalling at `timeout waiting for outgoing API request`. A browserless generator that returns `{ visitorData, poToken }` directly is both simpler to deploy and more responsive under container health checks.
   Evidence: local validation of `packages/yt-session-service/server.mjs` returned a valid `/token` response immediately, while the old wrapper image never moved past `503 Token has not yet been generated` in the same hosted workflow.
+
+- Observation: the browserless helper still has a spiky cold-start memory profile, and inherited `NODE_OPTIONS` made that worse in practice. Passing the worker heap budget directly on the child process argv made local startup deterministic again.
+  Evidence: before this change, `packages/yt-session-service/server.mjs` could reproduce `Reached heap limit Allocation failed - JavaScript heap out of memory` during the first generated token even with a nominal heap env set; after switching the child spawn to `node --max-old-space-size=3072 worker.mjs`, the helper returned a valid `/token` on first startup in local validation.
+
+- Observation: in hosted environments the API cannot rely only on its 5-minute background session poll, because the helper may become healthy after the API is already serving traffic.
+  Evidence: VPS logs showed `yt-session-generator` eventually succeeding on scheduled updates after the API had already logged startup-time `503 Token has not yet been generated` errors, so request-time on-demand fetching was needed to bridge that gap.
 
 ## Decision Log
 
@@ -87,6 +94,8 @@ Next, create the `deploy/dokploy/` directory. The web Dockerfile will use a Node
 Then create the API Dockerfile. It should build from the monorepo root using Node 20, install the system packages needed by native dependencies and ffmpeg-related modules, and use `pnpm deploy --filter=@imput/cobalt-api --prod` to copy the API runtime into a clean final image. The final stage should run as the `node` user, expose port `9000`, and start the existing API entrypoint with `node src/cobalt`.
 
 Add a third Compose service named `yt-session-generator`, built from `deploy/dokploy/yt-session-generator.Dockerfile`. That image should build and deploy the workspace package `packages/yt-session-service`, which serves `/token`, `/update`, and `/health` and generates `{ visitorData, poToken }` directly in a Node worker process instead of launching Chromium. The API service should depend on it and default `YOUTUBE_SESSION_SERVER` to `http://yt-session-generator:8080/` with `YOUTUBE_SESSION_INNERTUBE_CLIENT=WEB_EMBEDDED` unless the deployer overrides those values. This keeps hosted YouTube behavior aligned with the repository’s documented advanced setup without relying on a brittle headless-browser sidecar.
+
+The helper must treat `/token` as readiness, not just HTTP liveness. That means the service can return `503` until its first token exists, the Compose healthcheck must probe `/token`, and the API must be able to fetch the token on demand if a request arrives before the next background session refresh poll.
 
 After the container assets exist, update the human-facing documentation. Add a deployment section to the repository README that explains the Dokploy topology, required variables, and required mounted files. Add a dedicated section or example that names the exact Dokploy variables a user must define and which domains to attach in the Dokploy UI. Update `AGENTS.md` with short notes that explain why the Dokploy deployment does not use the old root Dockerfile and where the deployment assets live.
 
@@ -191,6 +200,9 @@ At the end of this work, these deployment interfaces must exist:
       API_KEY_URL=file:///run/secrets/siphon-keys.json
       YOUTUBE_SESSION_SERVER=http://yt-session-generator:8080/
       YOUTUBE_SESSION_INNERTUBE_CLIENT=WEB_EMBEDDED
+      YT_SESSION_UPDATE_INTERVAL=1800
+      YT_SESSION_RETRY_INTERVAL=60
+      YT_SESSION_WORKER_HEAP_MB=3072
 
 Revision note: created this ExecPlan before implementation to capture the final Dokploy deployment shape and the repository constraints that drive it.
 

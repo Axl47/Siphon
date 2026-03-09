@@ -4,6 +4,28 @@
 
 When writing complex features or significant refactors, use an ExecPlan (as described in `.docs/PLANS.md`) from design to implementation. Write new plans to `.docs/exec/`. If inside Plan Mode, create the plan in a multiline markdown block, and write it after initiating implementation, so you can use the plan to guide your implementation and refer back to it as needed. If outside Plan Mode, you can write the plan directly and refer to it as needed.
 
+## Rule
+
+Always prefix shell commands with `rtk`.
+
+Examples:
+
+```bash
+rtk git status
+rtk cargo test
+rtk npm run build
+rtk pytest -q
+rtk proxy <cmd>     # Run raw command without filtering
+```
+
+## RTK Verification
+
+```bash
+rtk --version
+rtk gain
+which rtk
+```
+
 ## Development Details
 
 Whenever new updates are made, this file (`AGENTS.md`) should be updated with any surprising files not apparent from the codebase that could benefit other developers. Focus on the why and when it could be useful.
@@ -36,11 +58,19 @@ Whenever new updates are made, this file (`AGENTS.md`) should be updated with an
 
 - In Dokploy Compose interpolation, `${VAR:-default}` makes an empty string fall back to the default. The deployment uses `${YOUTUBE_SESSION_SERVER-default}` instead so setting `YOUTUBE_SESSION_SERVER` to `""` actually disables the session generator for debugging.
 
-- `yt-session-generator` returns `503` on `/token` until it has actually produced a token. The Dokploy healthcheck therefore targets `/health` and the API uses `depends_on: service_healthy`; otherwise the API can start too early and log a misleading `ECONNREFUSED` against `yt-session-generator:8080`.
+- `yt-session-generator` returns `503` on `/token` until it has actually produced a token. The Dokploy healthcheck therefore targets `/token` and uses a longer `start_period`, so the API waits for an actual token instead of starting as soon as the helper HTTP server binds.
+
+- The token helper now has separate retry and steady-state intervals plus a configurable worker heap cap (`YT_SESSION_RETRY_INTERVAL`, `YT_SESSION_UPDATE_INTERVAL`, `YT_SESSION_WORKER_HEAP_MB`). Startup failures should retry quickly, while successful token refreshes should happen less often to avoid repeated large-memory runs.
+
+- `packages/yt-session-service/server.mjs` intentionally launches the worker with a direct `node --max-old-space-size=... worker.mjs` argv instead of inheriting `NODE_OPTIONS`. In practice, inherited container or Dokploy `NODE_OPTIONS` can interfere with the worker heap budget and make cold-start PoToken generation much less reliable.
+
+- `api/src/processing/helpers/youtube-session.js` does not rely only on the 5-minute background poll anymore. If a YouTube request needs a session token and none is cached yet, it now fetches `/token` on demand before giving up. Use that behavior when debugging helpers that warm up after the API has already started.
 
 - Public YouTube requests can behave worse on VPS IPs when browser-exported YouTube cookies are enabled. The service now retries `/player` once without YouTube cookies after a `fetch.fail`, so public videos can still work even if mounted cookies are too “hot” for the datacenter IP.
 
 - For hosted YouTube failures that still return `youtube.login` or `fetch.fail`, the YouTube service now retries with alternate Innertube clients (`ANDROID`, `MWEB`, `TV_EMBEDDED`, and `YTMUSIC_ANDROID` for audio-first cases) before surfacing the final API error. This makes the retry loop materially different instead of replaying the same `IOS` client request.
+
+- If `YOUTUBE_SESSION_SERVER` is configured, the YouTube service now also retries bot/login and fetch failures with a forced session-backed request before falling back across alternate public clients. That makes the session helper matter for standard `1080p` hosted requests instead of only for the old `>1080p` paths.
 
 - Final YouTube `content.video.unavailable` responses now include diagnostic context for the last attempted client and playability status/reason. Use that curl-visible context and the matching warning log before changing more deployment variables; it is the fastest way to tell whether the VPS is seeing a bot wall, a client-specific restriction, or a real unavailable video.
 

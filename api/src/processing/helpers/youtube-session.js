@@ -7,6 +7,7 @@ import { Green, Yellow } from "../../misc/console-text.js";
 const defaultAgent = new Agent();
 
 let session;
+let loadPromise;
 
 const validateSession = (sessionResponse) => {
     if (!sessionResponse.potoken) {
@@ -32,43 +33,66 @@ const updateSession = (newSession) => {
 }
 
 const loadSession = async () => {
-    const sessionServerUrl = new URL(env.ytSessionServer);
-    sessionServerUrl.pathname = "/token";
+    if (loadPromise) {
+        return loadPromise;
+    }
 
-    const response = await fetch(
-        sessionServerUrl,
-        { dispatcher: defaultAgent }
-    );
+    loadPromise = (async () => {
+        const sessionServerUrl = new URL(env.ytSessionServer);
+        sessionServerUrl.pathname = "/token";
 
-    const responseText = await response.text();
-
-    if (!response.ok) {
-        throw new Error(
-            `session server returned ${response.status} ${response.statusText}: ${responseText.slice(0, 200)}`
+        const response = await fetch(
+            sessionServerUrl,
+            { dispatcher: defaultAgent }
         );
+
+        const responseText = await response.text();
+
+        if (!response.ok) {
+            throw new Error(
+                `session server returned ${response.status} ${response.statusText}: ${responseText.slice(0, 200)}`
+            );
+        }
+
+        let newSession;
+        try {
+            newSession = JSON.parse(responseText);
+        } catch {
+            throw new Error(
+                `session server returned non-JSON payload: ${responseText.slice(0, 200)}`
+            );
+        }
+
+        validateSession(newSession);
+
+        if (!session || session.updated < newSession?.updated) {
+            cluster.broadcast({ youtube_session: newSession });
+            updateSession(newSession);
+        }
+
+        return session;
+    })()
+    .finally(() => {
+        loadPromise = null;
+    });
+
+    return loadPromise;
+}
+
+export const ensureYouTubeSession = async () => {
+    if (session?.potoken) {
+        return session;
     }
 
-    let newSession;
-    try {
-        newSession = JSON.parse(responseText);
-    } catch {
-        throw new Error(
-            `session server returned non-JSON payload: ${responseText.slice(0, 200)}`
-        );
-    }
-
-    validateSession(newSession);
-
-    if (!session || session.updated < newSession?.updated) {
-        cluster.broadcast({ youtube_session: newSession });
-        updateSession(newSession);
-    }
+    await loadSession();
+    return session;
 }
 
 const wrapLoad = (initial = false) => {
+    const hadSession = !!session?.potoken;
     loadSession()
     .then(() => {
-        if (initial) {
+        if (initial || !hadSession) {
             console.log(`${Green('[✓]')} poToken & visitor_data loaded successfully!`);
         }
     })
