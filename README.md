@@ -66,6 +66,8 @@ The Dokploy Compose file now includes `yt-session-generator` by default and poin
 
 This is the recommended default for VPS or datacenter deployments where YouTube is more likely to reject direct requests as bot traffic. You can still mount `cookies.json`, but the session generator is the primary hosted fix.
 
+If you need to disable the session generator for troubleshooting, set `YOUTUBE_SESSION_SERVER` to an explicit empty string in Dokploy. The Compose file uses unset-only interpolation so a blank value really disables it.
+
 ### Dokploy domains
 
 Attach domains in Dokploy's Domains tab instead of putting routing labels in Compose:

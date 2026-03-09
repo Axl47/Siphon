@@ -32,6 +32,8 @@ Whenever new updates are made, this file (`AGENTS.md`) should be updated with an
 
 - The stock `ghcr.io/imputnet/yt-session-generator:webserver` image launches Chromium as root and can fail on some VPS/container runtimes with `Failed to connect to browser` unless `no_sandbox=True` is passed to nodriver. The Dokploy path wraps that image in `deploy/dokploy/yt-session-generator.Dockerfile` and patches the upstream extractor instead of relying on runtime flags that the image does not expose.
 
+- In Dokploy Compose interpolation, `${VAR:-default}` makes an empty string fall back to the default. The deployment uses `${YOUTUBE_SESSION_SERVER-default}` instead so setting `YOUTUBE_SESSION_SERVER` to `""` actually disables the session generator for debugging.
+
 ## Sub Agents
 
 Use sub-agents where appropriate to break down complex changes into manageable pieces, and to allow for more focused implementation and testing. For example, if implementing a new feature that requires both backend and frontend changes, you might create separate sub-agents for each layer of the stack, but before then use an exploring agent (or multiple) to get context on the codebase and research the best approaches for the feature, outline the specific steps needed for implementation into a final exec plan, and spin up task subagents that handle the implementation. This allows for more efficient development and testing, as each sub-agent can focus on a specific aspect of the implementation, and can be tested independently before being integrated into the larger codebase.

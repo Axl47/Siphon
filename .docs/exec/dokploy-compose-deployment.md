@@ -18,6 +18,7 @@ After this change, Siphon can be deployed to Dokploy as a single Docker Compose 
 - [x] (2026-03-08 23:30Z) Validated Compose rendering, the web build-stage contract, the API deploy bundle, and the API runtime contract with a sample key file.
 - [x] (2026-03-09 14:40Z) Added `yt-session-generator` to the Dokploy Compose stack and documented it as the default hosted YouTube mitigation.
 - [x] (2026-03-09 15:20Z) Replaced the stock `yt-session-generator` image with a tiny Dokploy wrapper image that patches nodriver startup to use `no_sandbox=True`, based on VPS logs showing Chromium failing to connect when launched as root.
+- [x] (2026-03-09 15:55Z) Switched `YOUTUBE_SESSION_SERVER` interpolation from `${VAR:-default}` to `${VAR-default}` so Dokploy users can disable the session server by setting an explicit empty value during troubleshooting.
 - [ ] Run full `docker compose build` / `docker compose up` validation once Docker is available on the host. Completed: `docker compose config`; remaining: actual image build and container launch through Docker.
 
 ## Surprises & Discoveries
