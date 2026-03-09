@@ -60,13 +60,15 @@ services:
           "CMD",
           "node",
           "-e",
-          "fetch('http://127.0.0.1:9000/').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))"
+          "fetch('http://127.0.0.1:9000/').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))",
         ]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 20s
     init: true
+    volumes:
+      - /home/axor/.private/siphon-keys.json:/run/secrets/siphon-keys.json:ro
     ports:
       - "9000"
     restart: unless-stopped
