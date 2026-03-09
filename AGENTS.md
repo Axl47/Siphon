@@ -26,6 +26,8 @@ Whenever new updates are made, this file (`AGENTS.md`) should be updated with an
 
 - The root `docker-compose.yml` is designed for Dokploy UI-managed domains and mounted files. It publishes service ports without fixed host bindings so Dokploy can attach domains cleanly, and local validation should use `docker compose port web 3005` / `docker compose port api 9000` to discover the assigned host ports.
 
+- Hosted YouTube is more brittle from VPS and datacenter IPs than from local development. The Dokploy compose now includes `yt-session-generator` and defaults `YOUTUBE_SESSION_SERVER` to `http://yt-session-generator:3006/` plus `YOUTUBE_SESSION_INNERTUBE_CLIENT=WEB_EMBEDDED`; treat that as the baseline hosted YouTube configuration before reaching for more cookie tweaks.
+
 ## Sub Agents
 
 Use sub-agents where appropriate to break down complex changes into manageable pieces, and to allow for more focused implementation and testing. For example, if implementing a new feature that requires both backend and frontend changes, you might create separate sub-agents for each layer of the stack, but before then use an exploring agent (or multiple) to get context on the codebase and research the best approaches for the feature, outline the specific steps needed for implementation into a final exec plan, and spin up task subagents that handle the implementation. This allows for more efficient development and testing, as each sub-agent can focus on a specific aspect of the implementation, and can be tested independently before being integrated into the larger codebase.
