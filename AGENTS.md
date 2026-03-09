@@ -40,6 +40,8 @@ Whenever new updates are made, this file (`AGENTS.md`) should be updated with an
 
 - For hosted YouTube failures that still return `youtube.login` or `fetch.fail`, the YouTube service now retries with alternate Innertube clients (`ANDROID`, `MWEB`, `TV_EMBEDDED`, and `YTMUSIC_ANDROID` for audio-first cases) before surfacing the final API error. This makes the retry loop materially different instead of replaying the same `IOS` client request.
 
+- Final YouTube `content.video.unavailable` responses now include diagnostic context for the last attempted client and playability status/reason. Use that curl-visible context and the matching warning log before changing more deployment variables; it is the fastest way to tell whether the VPS is seeing a bot wall, a client-specific restriction, or a real unavailable video.
+
 ## Sub Agents
 
 Use sub-agents where appropriate to break down complex changes into manageable pieces, and to allow for more focused implementation and testing. For example, if implementing a new feature that requires both backend and frontend changes, you might create separate sub-agents for each layer of the stack, but before then use an exploring agent (or multiple) to get context on the codebase and research the best approaches for the feature, outline the specific steps needed for implementation into a final exec plan, and spin up task subagents that handle the implementation. This allows for more efficient development and testing, as each sub-agent can focus on a specific aspect of the implementation, and can be tested independently before being integrated into the larger codebase.

@@ -101,6 +101,19 @@ const retryWithFallbackClient = async ({ o, currentClient, reason }) => {
     });
 };
 
+const getPlayabilityReason = (playability) =>
+    playability?.reason
+    || playability?.error_screen?.subreason?.text
+    || playability?.error_screen?.reason?.text
+    || null;
+
+const getPlayabilityContext = (playability, innertubeClient, retryTrail = []) => ({
+    youtubeStatus: playability?.status || "unknown",
+    youtubeReason: getPlayabilityReason(playability),
+    youtubeClient: innertubeClient,
+    youtubeRetryTrail: retryTrail,
+});
+
 // https://ytjs.dev/guide/getting-started.html#providing-a-custom-javascript-interpreter
 const youtubeEval = async (data, env) => {
     const properties = [];
@@ -545,6 +558,7 @@ export default async function youtubeService(o) {
 
     const playability = info.playability_status;
     const basicInfo = info.video_details;
+    const retryTrail = getRetryTrail(o, innertubeClient);
 
     switch (playability.status) {
         case "LOGIN_REQUIRED":
@@ -558,7 +572,11 @@ export default async function youtubeService(o) {
                     return fallbackClientAttempt;
                 }
                 lastRefreshedAt = +new Date(0);
-                return { error: "youtube.login", retry: true }
+                return {
+                    error: "youtube.login",
+                    retry: true,
+                    context: getPlayabilityContext(playability, innertubeClient, retryTrail),
+                }
             }
             if (playability.reason.endsWith("age") || playability.reason.endsWith("inappropriate for some users.")) {
                 return { error: "content.video.age" }
@@ -582,7 +600,11 @@ export default async function youtubeService(o) {
                     return fallbackClientAttempt;
                 }
                 lastRefreshedAt = +new Date(0);
-                return { error: "youtube.login", retry: true }
+                return {
+                    error: "youtube.login",
+                    retry: true,
+                    context: getPlayabilityContext(playability, innertubeClient, retryTrail),
+                }
             }
             if (playability?.error_screen?.subreason?.text?.endsWith("in your country")) {
                 return { error: "content.video.region" }
@@ -597,13 +619,15 @@ export default async function youtubeService(o) {
     }
 
     if (playability.status !== "OK") {
+        const context = getPlayabilityContext(playability, innertubeClient, retryTrail);
+        console.warn(new Date(), `YouTube playability failure for ${o.id || o.postId || "unknown target"}: ${JSON.stringify(context)}`);
         // Force refresh player once we get 10 unavailable videos
         unavailableResponses ??= 0;
         if (unavailableResponses++ > 10) {
             lastRefreshedAt = +new Date(0);
             unavailableResponses = 0;
         }
-        return { error: "content.video.unavailable" };
+        return { error: "content.video.unavailable", context };
     }
 
     if (basicInfo.is_live) {

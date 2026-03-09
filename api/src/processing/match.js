@@ -340,6 +340,7 @@ export async function resolveMatchData({ host, patternMatch, params, authType, r
                 case "content.video.unavailable":
                     context = {
                         service: friendlyServiceName(host),
+                        ...(r.context || {}),
                     }
                     break;
             }
