@@ -54,7 +54,7 @@ services:
       NO_PROXY: ${NO_PROXY:-}
       CUSTOM_INNERTUBE_CLIENT: ${CUSTOM_INNERTUBE_CLIENT:-}
       YOUTUBE_GENERATE_PO_TOKENS: ${YOUTUBE_GENERATE_PO_TOKENS:-1}
-      YOUTUBE_SESSION_SERVER: ${YOUTUBE_SESSION_SERVER:-http://yt-session-generator:3006/}
+      YOUTUBE_SESSION_SERVER: ${YOUTUBE_SESSION_SERVER:-http://yt-session-generator:8080/}
       YOUTUBE_SESSION_INNERTUBE_CLIENT: ${YOUTUBE_SESSION_INNERTUBE_CLIENT:-WEB_EMBEDDED}
       YOUTUBE_PLAYER_ID: ${YOUTUBE_PLAYER_ID:-}
       ENABLE_DEPRECATED_YOUTUBE_HLS: ${ENABLE_DEPRECATED_YOUTUBE_HLS:-}
@@ -80,6 +80,7 @@ services:
 
   yt-session-generator:
     image: ghcr.io/imputnet/yt-session-generator:webserver
+    hostname: yt-session-generator
     healthcheck:
       test:
         [
@@ -88,13 +89,19 @@ services:
           "-q",
           "-O",
           "/dev/null",
-          "http://127.0.0.1:3006/token",
+          "http://127.0.0.1:8080/token",
         ]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 20s
     init: true
+    expose:
+      - "8080"
+    networks:
+      default:
+        aliases:
+          - yt-session-generator
     ports:
-      - "3006"
+      - "3006:8080"
     restart: unless-stopped

@@ -30,7 +30,7 @@ Siphon now includes a Dokploy-ready Docker Compose deployment at [`docker-compos
 
 - `web`: a static SvelteKit build served by nginx on container port `3005`
 - `api`: the cobalt-compatible processing API on container port `9000`
-- `yt-session-generator`: a helper service for hosted YouTube `poToken` and `visitor_data` on container port `3006`
+- `yt-session-generator`: a helper service for hosted YouTube `poToken` and `visitor_data`, exposed on host port `3006` and listening on internal container port `8080`
 
 The Dokploy-specific container assets live under [`deploy/dokploy/`](deploy/dokploy/). This path is separate from the old root [`Dockerfile`](Dockerfile), which remains an API-only image and is not the recommended Dokploy path.
 
@@ -61,7 +61,7 @@ If you enable Cloudflare Turnstile later, also define `TURNSTILE_SITEKEY`, `TURN
 
 The Dokploy Compose file now includes `yt-session-generator` by default and points the API at it with:
 
-- `YOUTUBE_SESSION_SERVER=http://yt-session-generator:3006/`
+- `YOUTUBE_SESSION_SERVER=http://yt-session-generator:8080/`
 - `YOUTUBE_SESSION_INNERTUBE_CLIENT=WEB_EMBEDDED`
 
 This is the recommended default for VPS or datacenter deployments where YouTube is more likely to reject direct requests as bot traffic. You can still mount `cookies.json`, but the session generator is the primary hosted fix.

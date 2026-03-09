@@ -26,7 +26,9 @@ Whenever new updates are made, this file (`AGENTS.md`) should be updated with an
 
 - The root `docker-compose.yml` is designed for Dokploy UI-managed domains and mounted files. It publishes service ports without fixed host bindings so Dokploy can attach domains cleanly, and local validation should use `docker compose port web 3005` / `docker compose port api 9000` to discover the assigned host ports.
 
-- Hosted YouTube is more brittle from VPS and datacenter IPs than from local development. The Dokploy compose now includes `yt-session-generator` and defaults `YOUTUBE_SESSION_SERVER` to `http://yt-session-generator:3006/` plus `YOUTUBE_SESSION_INNERTUBE_CLIENT=WEB_EMBEDDED`; treat that as the baseline hosted YouTube configuration before reaching for more cookie tweaks.
+- Hosted YouTube is more brittle from VPS and datacenter IPs than from local development. The Dokploy compose now includes `yt-session-generator` and defaults `YOUTUBE_SESSION_SERVER` to `http://yt-session-generator:8080/` plus `YOUTUBE_SESSION_INNERTUBE_CLIENT=WEB_EMBEDDED`; treat that as the baseline hosted YouTube configuration before reaching for more cookie tweaks.
+
+- `ghcr.io/imputnet/yt-session-generator:webserver` listens on port `8080` inside the container. If you need a different host port, map it as `HOST:8080` but keep `YOUTUBE_SESSION_SERVER` pointed at the internal `:8080` service URL for container-to-container traffic.
 
 ## Sub Agents
 

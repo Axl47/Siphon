@@ -79,7 +79,7 @@ Next, create the `deploy/dokploy/` directory. The web Dockerfile will use a Node
 
 Then create the API Dockerfile. It should build from the monorepo root using Node 20, install the system packages needed by native dependencies and ffmpeg-related modules, and use `pnpm deploy --filter=@imput/cobalt-api --prod` to copy the API runtime into a clean final image. The final stage should run as the `node` user, expose port `9000`, and start the existing API entrypoint with `node src/cobalt`.
 
-Add a third Compose service named `yt-session-generator` from `ghcr.io/imputnet/yt-session-generator:webserver`. The API service should depend on it and default `YOUTUBE_SESSION_SERVER` to `http://yt-session-generator:3006/` with `YOUTUBE_SESSION_INNERTUBE_CLIENT=WEB_EMBEDDED` unless the deployer overrides those values. This keeps hosted YouTube behavior aligned with the repository’s documented advanced setup.
+Add a third Compose service named `yt-session-generator` from `ghcr.io/imputnet/yt-session-generator:webserver`. The image listens on port `8080` inside the container, so if you need a different host port, map it as `HOST:8080`. The API service should depend on it and default `YOUTUBE_SESSION_SERVER` to `http://yt-session-generator:8080/` with `YOUTUBE_SESSION_INNERTUBE_CLIENT=WEB_EMBEDDED` unless the deployer overrides those values. This keeps hosted YouTube behavior aligned with the repository’s documented advanced setup.
 
 After the container assets exist, update the human-facing documentation. Add a deployment section to the repository README that explains the Dokploy topology, required variables, and required mounted files. Add a dedicated section or example that names the exact Dokploy variables a user must define and which domains to attach in the Dokploy UI. Update `AGENTS.md` with short notes that explain why the Dokploy deployment does not use the old root Dockerfile and where the deployment assets live.
 
@@ -173,14 +173,15 @@ At the end of this work, these deployment interfaces must exist:
 
       WEB_PORT=3005
       API_PORT=9000
-      YT_SESSION_PORT=3006
+      YT_SESSION_HOST_PORT=3006
+      YT_SESSION_CONTAINER_PORT=8080
       SIPHON_HOST=siphon.example.com
       SIPHON_DEFAULT_API_URL=https://api.example.com
       API_URL=https://api.example.com/
       CORS_URL=https://siphon.example.com
       API_AUTH_REQUIRED=1
       API_KEY_URL=file:///run/secrets/siphon-keys.json
-      YOUTUBE_SESSION_SERVER=http://yt-session-generator:3006/
+      YOUTUBE_SESSION_SERVER=http://yt-session-generator:8080/
       YOUTUBE_SESSION_INNERTUBE_CLIENT=WEB_EMBEDDED
 
 Revision note: created this ExecPlan before implementation to capture the final Dokploy deployment shape and the repository constraints that drive it.
