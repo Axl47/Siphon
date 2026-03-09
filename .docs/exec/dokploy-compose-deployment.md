@@ -25,6 +25,7 @@ After this change, Siphon can be deployed to Dokploy as a single Docker Compose 
 - [x] (2026-03-09 19:25Z) Fixed the YouTube session-backed retry path to rebuild the cached Innertube context when switching from public IOS requests to session-backed WEB_EMBEDDED requests, instead of reusing stale visitor/client state.
 - [x] (2026-03-09 19:45Z) Taught the session-backed WEB_EMBEDDED path to fetch `encryptedHostFlags` lazily before `/player` requests, matching the requirement the code already knew about for the older public WEB_EMBEDDED flow.
 - [x] (2026-03-09 19:55Z) Fixed a hosted YouTube retry loop where fallback clients such as `ANDROID` were still inheriting `forceSessionAttempt`, causing them to be coerced back into `WEB_EMBEDDED` and spam retries instead of actually changing client.
+- [x] (2026-03-09 20:05Z) Expanded the session-backed YouTube retry logic into a small session-client fallback chain (`WEB_EMBEDDED`, then `WEB`) so hosted retries can leave a failing session client instead of bouncing between the same one and public fallbacks.
 - [ ] Run full `docker compose build` / `docker compose up` validation once Docker is available on the host. Completed: `docker compose config`; remaining: actual image build and container launch through Docker.
 
 ## Surprises & Discoveries
@@ -70,6 +71,9 @@ After this change, Siphon can be deployed to Dokploy as a single Docker Compose 
 
 - Observation: the fallback retry path can accidentally preserve `forceSessionAttempt` from a prior session-backed retry, which makes “Retrying ... ANDROID” logs misleading because the request still resolves back to the session client.
   Evidence: API logs showed dozens of repeated `Retrying YouTube request with ANDROID after youtube.login (previous client: WEB_EMBEDDED)` lines until the request was manually stopped, which is only possible if the fallback never truly exits the forced session path.
+
+- Observation: the new session-client fallback logic is externally visible in logs. After deployment, a request that already tried session-backed `WEB_EMBEDDED` should either move on to `WEB` once or stop attempting session clients; if the logs still re-enter `WEB_EMBEDDED` after `ANDROID` or `MWEB`, the running API image is stale.
+  Evidence: the updated retry code now carries `sessionInnertubeClient` explicitly and chooses from `WEB_EMBEDDED` then `WEB`, so repeated `WEB_EMBEDDED` entries after public fallbacks indicate the older code path is still active.
 
 ## Decision Log
 

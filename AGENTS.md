@@ -72,6 +72,8 @@ Whenever new updates are made, this file (`AGENTS.md`) should be updated with an
 
 - When a hosted YouTube request falls back from a session-backed `WEB_EMBEDDED` retry to public clients like `ANDROID`, `api/src/processing/services/youtube.js` must clear `forceSessionAttempt`. Otherwise the fallback request gets coerced right back into `WEB_EMBEDDED` and can loop with repeated “Retrying ... ANDROID” logs while never actually leaving the session client.
 
+- The hosted YouTube session retry path now treats session clients as their own fallback chain: preferred session client first, then `WEB` once. If runtime logs still show `WEB_EMBEDDED` being retried again after `ANDROID` or `MWEB`, the old API image is still running and the newest retry-logic patch has not been deployed yet.
+
 - Public YouTube requests can behave worse on VPS IPs when browser-exported YouTube cookies are enabled. The service now retries `/player` once without YouTube cookies after a `fetch.fail`, so public videos can still work even if mounted cookies are too “hot” for the datacenter IP.
 
 - For hosted YouTube failures that still return `youtube.login` or `fetch.fail`, the YouTube service now retries with alternate Innertube clients (`ANDROID`, `MWEB`, `TV_EMBEDDED`, and `YTMUSIC_ANDROID` for audio-first cases) before surfacing the final API error. This makes the retry loop materially different instead of replaying the same `IOS` client request.
