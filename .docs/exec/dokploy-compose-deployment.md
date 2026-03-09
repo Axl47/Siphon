@@ -22,6 +22,7 @@ After this change, Siphon can be deployed to Dokploy as a single Docker Compose 
 - [x] (2026-03-09 16:10Z) Changed the session-generator readiness strategy to token-aware health checks and made the API depend on `service_healthy` so the API does not race the helper server's startup and emit a misleading `ECONNREFUSED`.
 - [x] (2026-03-09 16:50Z) Replaced the Chromium-based `yt-session-generator` wrapper with a browserless Node workspace package (`packages/yt-session-service`) that generates `{ visitorData, poToken }` directly and exposes `/token`, `/update`, and `/health`.
 - [x] (2026-03-09 18:50Z) Hardened the browserless helper startup by launching the token worker with an explicit `--max-old-space-size` argv, switching readiness to `/token`, and adding a request-time API fetch path so hosted YouTube recovers as soon as the helper produces its first token.
+- [x] (2026-03-09 19:25Z) Fixed the YouTube session-backed retry path to rebuild the cached Innertube context when switching from public IOS requests to session-backed WEB_EMBEDDED requests, instead of reusing stale visitor/client state.
 - [ ] Run full `docker compose build` / `docker compose up` validation once Docker is available on the host. Completed: `docker compose config`; remaining: actual image build and container launch through Docker.
 
 ## Surprises & Discoveries
@@ -58,6 +59,9 @@ After this change, Siphon can be deployed to Dokploy as a single Docker Compose 
 
 - Observation: in hosted environments the API cannot rely only on its 5-minute background session poll, because the helper may become healthy after the API is already serving traffic.
   Evidence: VPS logs showed `yt-session-generator` eventually succeeding on scheduled updates after the API had already logged startup-time `503 Token has not yet been generated` errors, so request-time on-demand fetching was needed to bridge that gap.
+
+- Observation: a valid helper token was not sufficient on its own, because the YouTube service could still reuse a process-cached non-session IOS Innertube instance when attempting a later session-backed WEB_EMBEDDED retry.
+  Evidence: API logs showed `[✓] poToken & visitor_data loaded successfully!` followed by `Retrying YouTube request with session-backed WEB_EMBEDDED...` and then `This video is unavailable`; the cached clone path was reusing the original base context until a cache-key-aware rebuild was introduced.
 
 ## Decision Log
 

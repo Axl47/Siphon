@@ -11,7 +11,7 @@ import { ensureYouTubeSession, getYouTubeSession } from "../helpers/youtube-sess
 const PLAYER_REFRESH_PERIOD = 1000 * 60 * 15; // ms
 const MINTER_REFRESH_PERIOD = 1000 * 60 * 60 * 6;
 
-let innertube, lastRefreshedAt;
+let innertube, lastRefreshedAt, innertubeCacheKey;
 let poMinter, poMinterLastRefresh = 0;
 
 const codecList = {
@@ -131,6 +131,14 @@ const getPlayabilityContext = (playability, innertubeClient, retryTrail = []) =>
     youtubeRetryTrail: retryTrail,
 });
 
+const getInnertubeCacheKey = ({ useSession, sessionTokens, skipYouTubeCookie, hasCookie }) => JSON.stringify({
+    mode: useSession ? "session" : "public",
+    visitorData: useSession ? sessionTokens?.visitor_data || null : null,
+    poToken: useSession ? sessionTokens?.potoken || null : null,
+    skipYouTubeCookie,
+    hasCookie,
+});
+
 // https://ytjs.dev/guide/getting-started.html#providing-a-custom-javascript-interpreter
 const youtubeEval = async (data, env) => {
     const properties = [];
@@ -178,7 +186,8 @@ let poModule;
 const cloneInnertube = async (customFetch, useSession, skipYouTubeCookie = false) => {
     Platform.shim.eval = youtubeEval;
 
-    if (env.ytGeneratePoTokens) {
+    const shouldGenerateLocalPoToken = env.ytGeneratePoTokens && !useSession;
+    if (shouldGenerateLocalPoToken) {
         if (!poModule) {
             // Importing this helper also needs BGUtils and JSDOM,
             // I'm importing them dynamically here so a) startup
@@ -193,8 +202,6 @@ const cloneInnertube = async (customFetch, useSession, skipYouTubeCookie = false
             poMinterLastRefresh = +new Date();
         }
     }
-
-    const shouldRefreshPlayer = globalThis.FORCE_RESET_INNERTUBE_PLAYER || lastRefreshedAt + PLAYER_REFRESH_PERIOD < new Date();
 
     const rawCookie = skipYouTubeCookie ? undefined : getCookie('youtube');
     const cookie = rawCookie?.toString();
@@ -212,6 +219,18 @@ const cloneInnertube = async (customFetch, useSession, skipYouTubeCookie = false
         throw "no_session_tokens";
     }
 
+    const requestedCacheKey = getInnertubeCacheKey({
+        useSession,
+        sessionTokens,
+        skipYouTubeCookie,
+        hasCookie: !!cookie,
+    });
+    const shouldRefreshPlayer =
+        !innertube
+        || globalThis.FORCE_RESET_INNERTUBE_PLAYER
+        || lastRefreshedAt + PLAYER_REFRESH_PERIOD < new Date()
+        || innertubeCacheKey !== requestedCacheKey;
+
     if (!innertube || shouldRefreshPlayer) {
         globalThis.FORCE_RESET_INNERTUBE_PLAYER = false;
         innertube = await Innertube.create({
@@ -225,12 +244,19 @@ const cloneInnertube = async (customFetch, useSession, skipYouTubeCookie = false
             player_id: env.ytPlayerId,
         });
 
-        if (env.ytGeneratePoTokens) {
+        if (useSession && sessionTokens?.visitor_data) {
+            innertube.session.context.client.visitorData = sessionTokens.visitor_data;
+        }
+
+        if (shouldGenerateLocalPoToken) {
             const { minter } = await poMinter;
             innertube.session.po_token = await minter.mintAsWebsafeString(innertube.session.context.client.visitorData);
+        } else if (useSession && sessionTokens?.potoken) {
+            innertube.session.po_token = sessionTokens.potoken;
         }
 
         lastRefreshedAt = +new Date();
+        innertubeCacheKey = requestedCacheKey;
         
         if (!useSession && env.customInnertubeClient === "WEB_EMBEDDED") {
             // WEB_EMBEDDED sometimes needs a property named `encryptedHostFlags`, which you
