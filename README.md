@@ -28,7 +28,7 @@ Frontend development expects [`web/.env.example`](web/.env.example), especially 
 
 Siphon now includes a Dokploy-ready Docker Compose deployment at [`docker-compose.yml`](docker-compose.yml). It runs as two services:
 
-- `web`: a static SvelteKit build served by nginx on container port `80`
+- `web`: a static SvelteKit build served by nginx on container port `3005`
 - `api`: the cobalt-compatible processing API on container port `9000`
 
 The Dokploy-specific container assets live under [`deploy/dokploy/`](deploy/dokploy/). This path is separate from the old root [`Dockerfile`](Dockerfile), which remains an API-only image and is not the recommended Dokploy path.
@@ -60,7 +60,7 @@ If you enable Cloudflare Turnstile later, also define `TURNSTILE_SITEKEY`, `TURN
 
 Attach domains in Dokploy's Domains tab instead of putting routing labels in Compose:
 
-- `siphon.example.com` → `web` service port `80`
+- `siphon.example.com` → `web` service port `3005`
 - `api.example.com` → `api` service port `9000`
 
 ### Local Docker validation
@@ -75,7 +75,7 @@ From the repository root, validate the same deployment assets locally:
 
 Because the compose file publishes container ports without fixed host bindings, inspect the assigned local host ports with:
 
-`docker compose port web 80`
+`docker compose port web 3005`
 
 `docker compose port api 9000`
 

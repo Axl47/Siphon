@@ -23,5 +23,5 @@ FROM nginx:1.27-alpine AS web
 COPY deploy/dokploy/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/web/build /usr/share/nginx/html
 
-EXPOSE 80
+EXPOSE 3005
 CMD ["nginx", "-g", "daemon off;"]

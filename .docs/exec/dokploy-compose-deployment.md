@@ -6,7 +6,7 @@ This document must be maintained in accordance with [`.docs/PLANS.md`](/Users/ax
 
 ## Purpose / Big Picture
 
-After this change, Siphon can be deployed to Dokploy as a single Docker Compose application with two public services: a static web frontend and a processing API. A new contributor should be able to build the stack locally with Docker Compose, then mirror the same topology in Dokploy by attaching domains and mounted secret files in the Dokploy UI. The visible proof is that the web app loads from one container, the API responds on its own container, and the web app can test its connection against the configured public API URL.
+After this change, Siphon can be deployed to Dokploy as a single Docker Compose application with two public services: a static web frontend and a processing API. A new contributor should be able to build the stack locally with Docker Compose, then mirror the same topology in Dokploy by attaching domains and mounted secret files in the Dokploy UI. The visible proof is that the web app loads from one container on port `3005`, the API responds on its own container, and the web app can test its connection against the configured public API URL.
 
 ## Progress
 
@@ -38,6 +38,9 @@ After this change, Siphon can be deployed to Dokploy as a single Docker Compose 
 - Observation: the repository was still ignoring `docker-compose.yml`, which would have prevented the Dokploy entrypoint file from being committed.
   Evidence: `git check-ignore -v docker-compose.yml` reported `.gitignore:19:docker-compose.yml` before the ignore rule was removed.
 
+- Observation: the Dokploy deployment path originally assumed the web service listened on port `80`, but the requested public service port is `3005`, so nginx, image metadata, Compose, and the deployment docs all need to stay aligned.
+  Evidence: before this adjustment, `deploy/dokploy/nginx.conf`, `deploy/dokploy/web.Dockerfile`, `docker-compose.yml`, and `README.md` all referenced port `80` for the web service.
+
 ## Decision Log
 
 - Decision: deploy Siphon as one Compose application with separate `web` and `api` services instead of a single combined container.
@@ -66,9 +69,9 @@ Dokploy is the target deployment platform. In this repository, “Dokploy-native
 
 ## Plan of Work
 
-First, add a root `docker-compose.yml` that defines two services named `web` and `api`. The compose file must be parameterized with Dokploy variables for all public URLs and any optional security features. The `web` service will build from a new Dockerfile under `deploy/dokploy/web.Dockerfile`, expose port `80`, and include build arguments for `SIPHON_DEFAULT_API_URL` and `SIPHON_HOST`. The `api` service will build from `deploy/dokploy/api.Dockerfile`, expose port `9000`, and accept runtime environment variables including `API_URL`, `CORS_URL`, `API_AUTH_REQUIRED`, and `API_KEY_URL`.
+First, add a root `docker-compose.yml` that defines two services named `web` and `api`. The compose file must be parameterized with Dokploy variables for all public URLs and any optional security features. The `web` service will build from a new Dockerfile under `deploy/dokploy/web.Dockerfile`, expose port `3005`, and include build arguments for `SIPHON_DEFAULT_API_URL` and `SIPHON_HOST`. The `api` service will build from `deploy/dokploy/api.Dockerfile`, expose port `9000`, and accept runtime environment variables including `API_URL`, `CORS_URL`, `API_AUTH_REQUIRED`, and `API_KEY_URL`.
 
-Next, create the `deploy/dokploy/` directory. The web Dockerfile will use a Node 20 build stage with pnpm 9 to install the monorepo dependencies and build only the web app, then copy the static output into an nginx runtime image. The nginx configuration in `deploy/dokploy/nginx.conf` must serve the static app with a `try_files` fallback to `/404.html`, send `Cache-Control: no-cache` for HTML and service-worker/manifest files, and use a long-lived immutable cache for hashed assets under `/_app/`.
+Next, create the `deploy/dokploy/` directory. The web Dockerfile will use a Node 20 build stage with pnpm 9 to install the monorepo dependencies and build only the web app, then copy the static output into an nginx runtime image. The nginx configuration in `deploy/dokploy/nginx.conf` must serve the static app on port `3005` with a `try_files` fallback to `/404.html`, send `Cache-Control: no-cache` for HTML and service-worker/manifest files, and use a long-lived immutable cache for hashed assets under `/_app/`.
 
 Then create the API Dockerfile. It should build from the monorepo root using Node 20, install the system packages needed by native dependencies and ffmpeg-related modules, and use `pnpm deploy --filter=@imput/cobalt-api --prod` to copy the API runtime into a clean final image. The final stage should run as the `node` user, expose port `9000`, and start the existing API entrypoint with `node src/cobalt`.
 
@@ -162,7 +165,7 @@ At the end of this work, these deployment interfaces must exist:
 - `deploy/dokploy/nginx.conf` that defines SPA/static serving and cache headers.
 - A documented Dokploy variable contract including:
 
-      WEB_PORT=80
+      WEB_PORT=3005
       API_PORT=9000
       SIPHON_HOST=siphon.example.com
       SIPHON_DEFAULT_API_URL=https://api.example.com

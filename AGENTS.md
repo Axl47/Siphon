@@ -24,7 +24,7 @@ Whenever new updates are made, this file (`AGENTS.md`) should be updated with an
 
 - `deploy/dokploy/` is the supported container deployment path for this fork. Use `deploy/dokploy/web.Dockerfile`, `deploy/dokploy/api.Dockerfile`, and `deploy/dokploy/nginx.conf` for Dokploy or any split web/API deployment; do not extend the old root `Dockerfile` unless you intentionally want the legacy API-only image.
 
-- The root `docker-compose.yml` is designed for Dokploy UI-managed domains and mounted files. It publishes service ports without fixed host bindings so Dokploy can attach domains cleanly, and local validation should use `docker compose port web 80` / `docker compose port api 9000` to discover the assigned host ports.
+- The root `docker-compose.yml` is designed for Dokploy UI-managed domains and mounted files. It publishes service ports without fixed host bindings so Dokploy can attach domains cleanly, and local validation should use `docker compose port web 3005` / `docker compose port api 9000` to discover the assigned host ports.
 
 ## Sub Agents
 
