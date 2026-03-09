@@ -1,28 +1,24 @@
-FROM ghcr.io/imputnet/yt-session-generator:webserver
+FROM node:20-alpine AS base
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
 
-# The upstream webserver image launches Chromium as root. Patch nodriver startup
-# to disable the sandbox so token extraction works in containerized VPS deployments.
-RUN python - <<'PY'
-from pathlib import Path
-import re
+FROM base AS build
+WORKDIR /app
 
-path = Path("/app/potoken_generator/extractor.py")
-text = path.read_text()
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml /app/
+COPY packages/yt-session-service /app/packages/yt-session-service
 
-pattern = re.compile(
-    r"(browser = await nodriver\.start\(headless=False,\n)"
-    r"(\s+)(?!no_sandbox=True,)(browser_executable_path=self\.browser_path,\n)"
-    r"(\s+)(user_data_dir=self\.profile_path\))"
-)
+RUN corepack enable && corepack prepare pnpm@9.6.0 --activate
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --filter @siphon/yt-session-service... --prod --frozen-lockfile
+RUN pnpm deploy --filter=@siphon/yt-session-service --prod /prod/yt-session-service
 
-updated, count = pattern.subn(
-    r"\1\2no_sandbox=True,\n\2\3\4\5",
-    text,
-    count=1,
-)
+FROM node:20-alpine AS runtime
+WORKDIR /app
 
-if count != 1:
-    raise SystemExit("expected nodriver.start block not found or already patched in extractor.py")
+COPY --from=build --chown=node:node /prod/yt-session-service /app
 
-path.write_text(updated)
-PY
+USER node
+
+EXPOSE 8080
+CMD ["node", "server.mjs"]

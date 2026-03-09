@@ -1,0 +1,16 @@
+{
+  "name": "@siphon/yt-session-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20 <21",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "youtube-po-token-generator": "0.6.0"
+  }
+}
