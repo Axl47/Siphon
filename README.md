@@ -62,9 +62,9 @@ If you enable Cloudflare Turnstile later, also define `TURNSTILE_SITEKEY`, `TURN
 The Dokploy Compose file now includes `yt-session-generator` by default and points the API at it with:
 
 - `YOUTUBE_SESSION_SERVER=http://yt-session-generator:8080/`
-- `YOUTUBE_SESSION_INNERTUBE_CLIENT=WEB_EMBEDDED`
+- `YOUTUBE_SESSION_INNERTUBE_CLIENT=WEB`
 
-This is the recommended default for VPS or datacenter deployments where YouTube is more likely to reject direct requests as bot traffic. You can still mount `cookies.json`, but the session generator is the primary hosted fix.
+This is the recommended default for VPS or datacenter deployments where YouTube is more likely to reject direct requests as bot traffic. The hosted helper now prefers the plain `WEB` client first and only falls back to `WEB_EMBEDDED` if needed, which is a better fit for the browserless PoToken generator used in this fork. You can still mount `cookies.json`, but the session generator is the primary hosted fix.
 
 If you need to disable the session generator for troubleshooting, set `YOUTUBE_SESSION_SERVER` to an explicit empty string in Dokploy. The Compose file uses unset-only interpolation so a blank value really disables it.
 

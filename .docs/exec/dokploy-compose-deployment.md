@@ -26,6 +26,7 @@ After this change, Siphon can be deployed to Dokploy as a single Docker Compose 
 - [x] (2026-03-09 19:45Z) Taught the session-backed WEB_EMBEDDED path to fetch `encryptedHostFlags` lazily before `/player` requests, matching the requirement the code already knew about for the older public WEB_EMBEDDED flow.
 - [x] (2026-03-09 19:55Z) Fixed a hosted YouTube retry loop where fallback clients such as `ANDROID` were still inheriting `forceSessionAttempt`, causing them to be coerced back into `WEB_EMBEDDED` and spam retries instead of actually changing client.
 - [x] (2026-03-09 20:05Z) Expanded the session-backed YouTube retry logic into a small session-client fallback chain (`WEB_EMBEDDED`, then `WEB`) so hosted retries can leave a failing session client instead of bouncing between the same one and public fallbacks.
+- [x] (2026-03-09 20:20Z) Flipped the hosted session-client preference to `WEB` first, with `WEB_EMBEDDED` as a secondary fallback, because the browserless PoToken helper is producing web-shaped session material and `WEB_EMBEDDED` was still failing first on the VPS.
 - [ ] Run full `docker compose build` / `docker compose up` validation once Docker is available on the host. Completed: `docker compose config`; remaining: actual image build and container launch through Docker.
 
 ## Surprises & Discoveries
@@ -74,6 +75,9 @@ After this change, Siphon can be deployed to Dokploy as a single Docker Compose 
 
 - Observation: the new session-client fallback logic is externally visible in logs. After deployment, a request that already tried session-backed `WEB_EMBEDDED` should either move on to `WEB` once or stop attempting session clients; if the logs still re-enter `WEB_EMBEDDED` after `ANDROID` or `MWEB`, the running API image is stale.
   Evidence: the updated retry code now carries `sessionInnertubeClient` explicitly and chooses from `WEB_EMBEDDED` then `WEB`, so repeated `WEB_EMBEDDED` entries after public fallbacks indicate the older code path is still active.
+
+- Observation: with the newer retry chain in place, the first session-backed hop was still `WEB_EMBEDDED` and was consistently failing immediately on the VPS, while the browserless helper itself is fundamentally generating web-session material.
+  Evidence: hosted logs showed the stable sequence `IOS -> WEB_EMBEDDED -> ANDROID -> WEB -> MWEB -> TV_EMBEDDED`, which is a sign that `WEB_EMBEDDED` is a poor first choice in this deployment even though the helper token is valid.
 
 ## Decision Log
 

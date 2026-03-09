@@ -50,7 +50,7 @@ const clientFallbackOrder = {
     video: ['ANDROID', 'MWEB', 'TV_EMBEDDED'],
     audio: ['YTMUSIC_ANDROID', 'ANDROID', 'MWEB'],
 };
-const sessionClientFallbackOrder = ['WEB_EMBEDDED', 'WEB'];
+const sessionClientFallbackOrder = ['WEB', 'WEB_EMBEDDED'];
 
 const videoQualities = [144, 240, 360, 480, 720, 1080, 1440, 2160, 4320];
 const youtubeRangeProbeHeaders = {
@@ -78,7 +78,7 @@ const getFallbackInnertubeClient = ({ currentClient, isAudioOnly, retryTrail }) 
     return candidates.find(candidate => !attempted.has(candidate) && candidate !== currentClient) || null;
 };
 
-const getPreferredSessionInnertubeClient = (o) => o.sessionInnertubeClient || env.ytSessionInnertubeClient || "WEB_EMBEDDED";
+const getPreferredSessionInnertubeClient = (o) => o.sessionInnertubeClient || env.ytSessionInnertubeClient || "WEB";
 
 const getFallbackSessionInnertubeClient = ({ o, currentClient, retryTrail }) => {
     const attempted = new Set(retryTrail);
