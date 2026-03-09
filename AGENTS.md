@@ -48,13 +48,13 @@ Whenever new updates are made, this file (`AGENTS.md`) should be updated with an
 
 - The root `docker-compose.yml` is designed for Dokploy UI-managed domains and mounted files. It publishes service ports without fixed host bindings so Dokploy can attach domains cleanly, and local validation should use `docker compose port web 3005` / `docker compose port api 9000` to discover the assigned host ports.
 
-- Hosted YouTube is more brittle from VPS and datacenter IPs than from local development. The Dokploy compose now includes `yt-session-generator` and defaults `YOUTUBE_SESSION_SERVER` to `http://yt-session-generator:8080/` plus `YOUTUBE_SESSION_INNERTUBE_CLIENT=WEB_EMBEDDED`; treat that as the baseline hosted YouTube configuration before reaching for more cookie tweaks.
+- Hosted YouTube is more brittle from VPS and datacenter IPs than from local development. The Dokploy compose now includes `yt-session-generator`, defaults `YOUTUBE_SESSION_SERVER` to `http://yt-session-generator:8080/`, and treats the hosted retry order as an explicit env surface (`YOUTUBE_HOSTED_VIDEO_CLIENTS`, `YOUTUBE_HOSTED_AUDIO_CLIENTS`, `YOUTUBE_HOSTED_SESSION_CLIENTS`) instead of a hard-coded fallback chain. Tune that queue first before reaching for `YOUTUBE_PROXY_URL`.
 
 - `yt-session-generator` now comes from the workspace package `packages/yt-session-service`, not the upstream Chromium-based image. It serves the same `/token` and `/update` contract the API expects, but generates `{ visitorData, poToken }` in a Node worker process so the helper stays responsive while a token refresh is running.
 
 - The Dokploy `yt-session-generator` build now depends on the workspace lockfile because it installs `packages/yt-session-service` with pnpm and deploys only that package into the final image. If Dokploy reports a missing dependency during that build, check that `pnpm-lock.yaml` and `packages/yt-session-service/package.json` were both deployed together.
 
-- The Dokploy Compose file forwards `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, and `YT_SESSION_UPDATE_INTERVAL` into `yt-session-generator`. If a hosted YouTube fix involves routing traffic through a proxy, make sure the helper service gets the same proxy envs as the API or the token path and media path will behave differently.
+- The Dokploy Compose file now keeps helper proxy routing separate from the API-wide proxy envs. Use `YT_SESSION_HTTP_PROXY`, `YT_SESSION_HTTPS_PROXY`, and `YT_SESSION_NO_PROXY` for `yt-session-generator`; use `YOUTUBE_PROXY_URL` only for the API's YouTube metadata/media fallback path.
 
 - In Dokploy Compose interpolation, `${VAR:-default}` makes an empty string fall back to the default. The deployment uses `${YOUTUBE_SESSION_SERVER-default}` instead so setting `YOUTUBE_SESSION_SERVER` to `""` actually disables the session generator for debugging.
 
@@ -72,17 +72,23 @@ Whenever new updates are made, this file (`AGENTS.md`) should be updated with an
 
 - When a hosted YouTube request falls back from a session-backed `WEB_EMBEDDED` retry to public clients like `ANDROID`, `api/src/processing/services/youtube.js` must clear `forceSessionAttempt`. Otherwise the fallback request gets coerced right back into `WEB_EMBEDDED` and can loop with repeated “Retrying ... ANDROID” logs while never actually leaving the session client.
 
-- The hosted YouTube session retry path now treats session clients as their own fallback chain: preferred session client first, then `WEB` once. If runtime logs still show `WEB_EMBEDDED` being retried again after `ANDROID` or `MWEB`, the old API image is still running and the newest retry-logic patch has not been deployed yet.
+- `api/src/processing/services/youtube-policy.js` is now the single source of truth for hosted YouTube retry order and failure classification. Change that module, not ad hoc branches in `youtube.js`, when you need to alter client order, proxy replay behavior, or retryability rules.
 
-- The hosted YouTube defaults now prefer `WEB` as the primary session-backed Innertube client and keep `WEB_EMBEDDED` only as a secondary fallback. The browserless PoToken helper is generating web-session material, and in practice the VPS was still failing earliest on `WEB_EMBEDDED` even after the helper was healthy.
+- The hosted YouTube defaults now prefer `WEB` as the primary session-backed Innertube client, use `WEB_CREATOR` as the second hosted session client, and keep `WEB_EMBEDDED` opt-in only. The browserless PoToken helper is generating web-session material, and in practice the VPS was still failing earliest on `WEB_EMBEDDED` and `TV_EMBEDDED`.
 
 - Public YouTube requests can behave worse on VPS IPs when browser-exported YouTube cookies are enabled. The service now retries `/player` once without YouTube cookies after a `fetch.fail`, so public videos can still work even if mounted cookies are too “hot” for the datacenter IP.
 
-- For hosted YouTube failures that still return `youtube.login` or `fetch.fail`, the YouTube service now retries with alternate Innertube clients (`ANDROID`, `MWEB`, `TV_EMBEDDED`, and `YTMUSIC_ANDROID` for audio-first cases) before surfacing the final API error. This makes the retry loop materially different instead of replaying the same `IOS` client request.
+- For hosted YouTube failures that still return `youtube.login`, `fetch.fail`, or unsupported-device playability errors, the YouTube service now walks a structured attempt queue and reports both `youtubeRetryTrail` and `youtubeAttemptTrail`. The default queue is `IOS -> WEB(session) -> ANDROID -> WEB_CREATOR(session) -> MWEB -> TV` for video and `IOS -> WEB(session) -> YTMUSIC_ANDROID -> WEB_CREATOR(session) -> ANDROID -> MWEB` for audio. If `YOUTUBE_PROXY_URL` is configured, that exact queue is replayed once through the proxy after the direct pass is exhausted.
 
 - If `YOUTUBE_SESSION_SERVER` is configured, the YouTube service now also retries bot/login and fetch failures with a forced session-backed request before falling back across alternate public clients. That makes the session helper matter for standard `1080p` hosted requests instead of only for the old `>1080p` paths.
 
 - Final YouTube `content.video.unavailable` responses now include diagnostic context for the last attempted client and playability status/reason. Use that curl-visible context and the matching warning log before changing more deployment variables; it is the fastest way to tell whether the VPS is seeing a bot wall, a client-specific restriction, or a real unavailable video.
+
+- `api/src/processing/match.js` now allows the YouTube service to override `proxyToUse` and `requestIP` after extraction. That bridge is what makes a late `YOUTUBE_PROXY_URL` win propagate into `match-action.js`, tunnel creation, and later stream transplants.
+
+- `api/src/processing/helpers/cobalt-fallback.js` is the deployer-only YouTube failover path to a second cobalt-compatible instance. Use it when a private Siphon deployment wants YouTube retries through another instance without exposing that instance’s URLs to clients; the helper always re-wraps successful fallback URLs as local Siphon tunnels.
+
+- Community cobalt instances generally do not expose this fork’s `/analyze` endpoint. The fallback helper therefore tries remote `/analyze` first and, on `404/405`, synthesizes a Siphon quality list from repeated fallback `POST /` calls. If fallback analyze starts returning sparse metadata, inspect `api/src/processing/helpers/cobalt-fallback.js` before touching the web client.
 
 ## Sub Agents
 

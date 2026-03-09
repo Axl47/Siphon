@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { env } from "../config.js";
 import {
+    analyzeMatch,
     buildAnalyzeError,
     buildAnalyzeOption,
     buildAnalyzePicker,
@@ -11,6 +13,25 @@ import {
     getAnalyzeDelivery,
     getAnalyzeSizeKind,
 } from "./analyze.js";
+
+const originalFetch = globalThis.fetch;
+
+const withFallbackEnv = async (overrides, fn) => {
+    const snapshot = {
+        ytFallbackApiURL: env.ytFallbackApiURL,
+        ytFallbackAuthHeader: env.ytFallbackAuthHeader,
+        ytFallbackTimeoutMs: env.ytFallbackTimeoutMs,
+    };
+
+    Object.assign(env, overrides);
+
+    try {
+        await fn();
+    } finally {
+        Object.assign(env, snapshot);
+        globalThis.fetch = originalFetch;
+    }
+};
 
 const makeVideoOption = (overrides = {}) => ({
     data: {
@@ -258,6 +279,103 @@ test("dedupeAnalyzeOptions keeps options with different delivery or bitrate meta
     ]);
 
     assert.equal(options.length, 3);
+});
+
+test("analyzeMatch synthesizes a YouTube fallback quality list when the fallback instance lacks /analyze", async () => {
+    await withFallbackEnv({
+        ytFallbackApiURL: "https://fallback.example",
+        ytFallbackTimeoutMs: 100,
+    }, async () => {
+        const calls = [];
+        globalThis.fetch = async (url, init) => {
+            const parsedURL = new URL(url);
+            const body = JSON.parse(init.body);
+            calls.push({ pathname: parsedURL.pathname, body });
+
+            if (parsedURL.pathname === "/analyze") {
+                return new Response(JSON.stringify({
+                    error: {
+                        code: "error.api.generic",
+                    },
+                }), {
+                    status: 405,
+                    headers: {
+                        "content-type": "application/json",
+                    },
+                });
+            }
+
+            if (body.downloadMode === "audio") {
+                return new Response(JSON.stringify({
+                    status: "tunnel",
+                    url: "https://fallback.example/tunnel/audio",
+                    filename: "Example Video.mp3",
+                }), {
+                    status: 200,
+                    headers: {
+                        "content-type": "application/json",
+                    },
+                });
+            }
+
+            if (body.videoQuality === "1080") {
+                return new Response(JSON.stringify({
+                    status: "tunnel",
+                    url: "https://fallback.example/tunnel/video",
+                    filename: "Example Video.mp4",
+                }), {
+                    status: 200,
+                    headers: {
+                        "content-type": "application/json",
+                    },
+                });
+            }
+
+            return new Response(JSON.stringify({
+                error: {
+                    code: "error.api.youtube.no_matching_format",
+                },
+            }), {
+                status: 400,
+                headers: {
+                    "content-type": "application/json",
+                },
+            });
+        };
+
+        const response = await analyzeMatch({
+            host: "youtube",
+            patternMatch: {
+                id: "abc123xyz89",
+            },
+            request: {
+                url: new URL("https://www.youtube.com/watch?v=abc123xyz89"),
+                audioFormat: "mp3",
+                youtubeVideoCodec: "h264",
+                youtubeVideoContainer: "auto",
+                allowH265: false,
+                tiktokFullAudio: false,
+            },
+            authType: "none",
+            serviceOverrides: {
+                youtube: async () => ({
+                    error: "youtube.login",
+                    context: {
+                        youtubeStatus: "LOGIN_REQUIRED",
+                        youtubeReason: "Sign in to confirm you're not a bot",
+                    },
+                }),
+            },
+        });
+
+        assert.equal(calls[0].pathname, "/analyze");
+        assert.equal(response.status, "ok");
+        assert.equal(response.options.length, 2);
+        assert.equal(response.options[0].label, "1080p");
+        assert.equal(response.options[1].label, "Audio");
+        assert.equal(response.source.platform, "youtube");
+        assert.equal(response.source.title, "Example Video");
+    });
 });
 
 test("analyze metadata helpers expose delivery, bitrate, and size kind", () => {

@@ -66,6 +66,13 @@ this document is not final and will expand over time. feel free to improve it!
 | CUSTOM_INNERTUBE_CLIENT          | `IOS`                    |
 | YOUTUBE_SESSION_SERVER           | `http://localhost:8080/` |
 | YOUTUBE_SESSION_INNERTUBE_CLIENT | `WEB`                    |
+| YOUTUBE_HOSTED_VIDEO_CLIENTS     | `IOS,ANDROID,MWEB,TV`    |
+| YOUTUBE_HOSTED_AUDIO_CLIENTS     | `IOS,YTMUSIC_ANDROID`    |
+| YOUTUBE_HOSTED_SESSION_CLIENTS   | `WEB,WEB_CREATOR`        |
+| YOUTUBE_PROXY_URL                | `http://10.0.0.1:8000/`  |
+| YOUTUBE_FALLBACK_API_URL         | `https://fallback.example` |
+| YOUTUBE_FALLBACK_AUTH_HEADER     | `Api-Key abc123`         |
+| YOUTUBE_FALLBACK_TIMEOUT_MS      | `20000`                  |
 | YOUTUBE_ALLOW_BETTER_AUDIO       | `1`                      |
 | ENABLE_DEPRECATED_YOUTUBE_HLS    | `key`                    |
 
@@ -270,6 +277,53 @@ the value is a URL.
 innertube client that's compatible with botguard's (web) `poToken` and `visitor_data`.
 
 the value is a string.
+
+### YOUTUBE_HOSTED_VIDEO_CLIENTS
+comma-separated public Innertube client order used for hosted YouTube video retries. if unset, cobalt derives `IOS,ANDROID,MWEB,TV`, with `CUSTOM_INNERTUBE_CLIENT` inserted first when present.
+
+the value is a comma-separated string of supported client names.
+
+### YOUTUBE_HOSTED_AUDIO_CLIENTS
+comma-separated public Innertube client order used for hosted YouTube audio-first retries. if unset, cobalt derives `IOS,YTMUSIC_ANDROID,ANDROID,MWEB`, with `CUSTOM_INNERTUBE_CLIENT` inserted first when present.
+
+the value is a comma-separated string of supported client names.
+
+### YOUTUBE_HOSTED_SESSION_CLIENTS
+comma-separated session-backed client order used for hosted YouTube retries. if unset, cobalt derives `WEB,WEB_CREATOR`, with `YOUTUBE_SESSION_INNERTUBE_CLIENT` inserted first when present.
+
+`WEB_EMBEDDED` is intentionally no longer in the default hosted session list. only add it explicitly if you are testing it on purpose.
+
+the value is a comma-separated string of supported client names.
+
+### YOUTUBE_PROXY_URL
+optional YouTube-only proxy override. when configured, cobalt will run the normal hosted YouTube retry queue directly first, then replay that same queue once through this proxy before surfacing the final API error.
+
+this does not replace the global `HTTP_PROXY` / `HTTPS_PROXY` behavior for other services. use this when hosted YouTube needs a residential or other special route but the rest of the API should stay direct.
+
+if you are also running the browserless `yt-session-generator` helper, give that helper its own `YT_SESSION_HTTP_PROXY`, `YT_SESSION_HTTPS_PROXY`, and `YT_SESSION_NO_PROXY` values in your deployment config when it should use the same route.
+
+the value is a URL.
+
+### YOUTUBE_FALLBACK_API_URL
+URL of a secondary cobalt-compatible instance used only as a hidden YouTube failover path after the local hosted YouTube retry chain is exhausted.
+
+this is intended for private deployments. when it is set, Siphon still keeps the browser on your own API domain by re-wrapping successful fallback URLs as local tunnels, and non-youtube services remain unchanged.
+
+the value is a URL using `http` or `https`, and it must not point to the same origin as `API_URL`.
+
+### YOUTUBE_FALLBACK_AUTH_HEADER
+optional full `Authorization` header value used when Siphon talks to the fallback cobalt instance.
+
+examples:
+- `Api-Key aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee`
+- `Bearer eyJhbGciOi...`
+
+the value is a string.
+
+### YOUTUBE_FALLBACK_TIMEOUT_MS
+timeout, in milliseconds, for requests to the fallback cobalt instance. if the fallback instance times out or returns an invalid response, Siphon keeps the original local YouTube error and adds fallback diagnostics to the error context.
+
+the value is a number.
 
 ### YOUTUBE_ALLOW_BETTER_AUDIO
 when set to `1`, cobalt will try to use higher quality audio if user requests it via `youtubeBetterAudio`. will negatively impact the rate limit of a secondary youtube client with a session.

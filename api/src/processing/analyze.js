@@ -5,6 +5,15 @@ import { resolveMatchAction } from "./match-action.js";
 import { audioIgnore } from "./service-config.js";
 import { estimateTunnelLength } from "../stream/shared.js";
 import { wrapStream, destroyInternalStream } from "../stream/manage.js";
+import {
+    appendFallbackDiagnosticsToError,
+    buildFallbackAnalyzeOption,
+    buildFallbackAnalyzeRequests,
+    buildFallbackAnalyzeSource,
+    callFallbackAnalyze,
+    callFallbackDownload,
+    shouldTryYoutubeFallback,
+} from "./helpers/cobalt-fallback.js";
 
 const qualityCandidates = ["max", "2160", "1440", "1080", "720", "480", "360", "240", "144"];
 
@@ -319,7 +328,129 @@ const shouldSkipOptionError = (errorCode) => [
     "error.api.youtube.no_matching_format",
 ].includes(errorCode);
 
-export async function analyzeMatch({ host, patternMatch, request, authType }) {
+const buildAnalyzeErrorResponse = (code, context) => ({
+    status: "error",
+    error: {
+        code,
+        context,
+    },
+});
+
+const tryRemoteAnalyze = async (request) => {
+    const analyzeResult = await callFallbackAnalyze(request);
+    if (!analyzeResult.ok) {
+        return analyzeResult;
+    }
+
+    if (["ok", "picker"].includes(analyzeResult.response.status)) {
+        return analyzeResult.response;
+    }
+
+    analyzeResult.ok = false;
+    analyzeResult.errorCode = "youtube.fallback.invalid_analyze_status";
+    analyzeResult.responseStatus ??= 200;
+    return analyzeResult;
+};
+
+const trySyntheticFallbackAnalyze = async (request) => {
+    const optionRequests = buildFallbackAnalyzeRequests(request);
+    const options = [];
+    let source = null;
+
+    for (const [index, optionRequest] of optionRequests.entries()) {
+        const result = await callFallbackDownload(optionRequest);
+        if (!result.ok) {
+            if (shouldSkipOptionError(`error.api.${result.errorCode}`)) {
+                continue;
+            }
+
+            return result;
+        }
+
+        if (result.response.status === "picker") {
+            return {
+                ok: true,
+                response: buildAnalyzePicker({
+                    source: buildFallbackAnalyzeSource(request, result.response),
+                    picker: result.response.picker,
+                }),
+                instanceHost: result.instanceHost,
+            };
+        }
+
+        if (!["tunnel", "redirect", "local-processing"].includes(result.response.status)) {
+            continue;
+        }
+
+        source ||= buildFallbackAnalyzeSource(request, result.response);
+        options.push(buildFallbackAnalyzeOption(optionRequest, result.response, index));
+    }
+
+    if (!options.length) {
+        return {
+            ok: false,
+            errorCode: "youtube.fallback.no_options",
+        };
+    }
+
+    return {
+        ok: true,
+        response: {
+            status: "ok",
+            source: source || buildFallbackAnalyzeSource(request, { filename: null }),
+            options: dedupeAnalyzeOptions(options),
+        },
+    };
+};
+
+const maybeUseYoutubeAnalyzeFallback = async ({ host, request, localResult }) => {
+    if (
+        host !== "youtube"
+        || localResult.status !== "error"
+        || !shouldTryYoutubeFallback(localResult.error.code, localResult.error.context)
+    ) {
+        return localResult;
+    }
+
+    console.warn(
+        `Retrying YouTube analyze via fallback instance after ${localResult.error.code} `
+        + `${localResult.error.context ? JSON.stringify(localResult.error.context) : ""}`.trim()
+    );
+
+    let fallbackResult = await tryRemoteAnalyze({
+        ...request,
+        url: request.url.toString(),
+    });
+
+    if (!fallbackResult.ok && [404, 405].includes(fallbackResult.responseStatus || 0)) {
+        fallbackResult = await trySyntheticFallbackAnalyze(request);
+    }
+
+    if (fallbackResult.ok) {
+        console.warn(
+            `YouTube analyze fallback succeeded via ${fallbackResult.instanceHost || "unknown"}.`
+        );
+        return fallbackResult.response;
+    }
+
+    console.warn(
+        `YouTube analyze fallback failed via ${fallbackResult.instanceHost || "unknown"} `
+        + `with ${fallbackResult.errorCode}.`
+    );
+
+    return buildAnalyzeErrorResponse(
+        localResult.error.code,
+        appendFallbackDiagnosticsToError({
+            body: {
+                error: {
+                    context: localResult.error.context || {},
+                },
+            },
+        }, fallbackResult).body.error.context
+    );
+};
+
+const runLocalAnalyzeMatch = async ({ host, patternMatch, request, authType, serviceOverrides }) => {
     const baseRequest = buildBaseDownloadRequest(request);
     const initial = await resolveMatchData({
         host,
@@ -329,6 +460,7 @@ export async function analyzeMatch({ host, patternMatch, request, authType }) {
             url: request.url,
         },
         authType,
+        serviceOverrides,
     });
 
     if (initial.error) {
@@ -383,6 +515,7 @@ export async function analyzeMatch({ host, patternMatch, request, authType }) {
                 url: request.url,
             },
             authType,
+            serviceOverrides,
         });
 
         if (resolvedData.error) {
@@ -417,4 +550,9 @@ export async function analyzeMatch({ host, patternMatch, request, authType }) {
         source,
         options,
     });
+};
+
+export async function analyzeMatch({ host, patternMatch, request, authType, serviceOverrides }) {
+    const localResult = await runLocalAnalyzeMatch({ host, patternMatch, request, authType, serviceOverrides });
+    return maybeUseYoutubeAnalyzeFallback({ host, request, localResult });
 }

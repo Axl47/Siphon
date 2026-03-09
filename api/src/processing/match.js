@@ -6,6 +6,12 @@ import { createResponse } from "../processing/request.js";
 
 import { testers } from "./service-patterns.js";
 import matchAction from "./match-action.js";
+import {
+    appendFallbackDiagnosticsToError,
+    callFallbackDownload,
+    shouldTryYoutubeFallback,
+    wrapFallbackResponse,
+} from "./helpers/cobalt-fallback.js";
 
 import { friendlyServiceName } from "./service-alias.js";
 
@@ -36,7 +42,7 @@ const MAX_RETRY_AMOUNT = 5;
 
 let freebind;
 
-export async function resolveMatchData({ host, patternMatch, params, authType, retryCount = 0 }) {
+export async function resolveMatchData({ host, patternMatch, params, authType, retryCount = 0, serviceOverrides }) {
     const { url } = params;
     assert(url instanceof URL);
     let dispatcher, requestIP, proxyToUse;
@@ -134,6 +140,8 @@ export async function resolveMatchData({ host, patternMatch, params, authType, r
             case "youtube":
                 let fetchInfo = {
                     dispatcher,
+                    requestIP,
+                    proxyToUse,
                     id: patternMatch.id?.slice(0, 11),
                     postId: patternMatch.postId,
                     quality: params.videoQuality,
@@ -158,7 +166,7 @@ export async function resolveMatchData({ host, patternMatch, params, authType, r
                     }
                 }
 
-                r = await youtube(fetchInfo);
+                r = await (serviceOverrides?.youtube || youtube)(fetchInfo);
                 break;
 
             case "reddit":
@@ -307,6 +315,11 @@ export async function resolveMatchData({ host, patternMatch, params, authType, r
                 };
         }
 
+        if (host === "youtube") {
+            proxyToUse = r.proxyToUse ?? proxyToUse;
+            requestIP = r.requestIP ?? requestIP;
+        }
+
         if (r.isAudioOnly) {
             isAudioOnly = true;
             isAudioMuted = false;
@@ -323,7 +336,7 @@ export async function resolveMatchData({ host, patternMatch, params, authType, r
         if (r.error) {
             if (r.retry) {
                 if (++retryCount < MAX_RETRY_AMOUNT)
-                    return await resolveMatchData({ host, patternMatch, params, authType, retryCount });
+                    return await resolveMatchData({ host, patternMatch, params, authType, retryCount, serviceOverrides });
             }
             let context;
             switch(r.error) {
@@ -395,6 +408,48 @@ export default async function match(options) {
     const resolved = await resolveMatchData(options);
 
     if (resolved.error) {
+        if (options.host === "youtube" && shouldTryYoutubeFallback(
+            resolved.error.body?.error?.code,
+            resolved.error.body?.error?.context,
+        )) {
+            const fallbackRequest = {
+                ...options.params,
+                url: options.params.url.toString(),
+                localProcessing: "disabled",
+                alwaysProxy: true,
+            };
+
+            const fallbackResult = await callFallbackDownload(fallbackRequest);
+            const fallbackContext = resolved.error.body?.error?.context;
+
+            console.warn(
+                `Retrying YouTube via fallback instance ${fallbackResult.instanceHost || "unknown"} `
+                + `after ${resolved.error.body?.error?.code} `
+                + `${fallbackContext ? JSON.stringify(fallbackContext) : ""}`.trim()
+            );
+
+            if (fallbackResult.ok) {
+                const wrapped = wrapFallbackResponse(fallbackResult.response, options.host);
+                if (wrapped) {
+                    console.warn(
+                        `YouTube fallback succeeded via ${fallbackResult.instanceHost || "unknown"} `
+                        + `with response ${fallbackResult.response.status}.`
+                    );
+                    return wrapped;
+                }
+
+                fallbackResult.errorCode = "youtube.fallback.unsupported_status";
+                fallbackResult.responseStatus ??= 200;
+            }
+
+            console.warn(
+                `YouTube fallback failed via ${fallbackResult.instanceHost || "unknown"} `
+                + `with ${fallbackResult.errorCode}.`
+            );
+
+            return appendFallbackDiagnosticsToError(resolved.error, fallbackResult);
+        }
+
         return resolved.error;
     }
 

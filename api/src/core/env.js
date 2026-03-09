@@ -1,6 +1,10 @@
 import ipaddr from "ipaddr.js";
 import { Constants } from "youtubei.js";
 import { services } from "../processing/service-config.js";
+import {
+    parseHostedClientList,
+    validateHostedClientList,
+} from "../processing/services/youtube-policy.js";
 import { updateEnv, canonicalEnv, env as currentEnv } from "../config.js";
 
 import { FileWatcher } from "../misc/file-watcher.js";
@@ -130,6 +134,15 @@ export const loadEnvs = (env = process.env) => {
         ytSessionServer: env.YOUTUBE_SESSION_SERVER,
         ytSessionReloadInterval: 300,
         ytSessionInnertubeClient: env.YOUTUBE_SESSION_INNERTUBE_CLIENT,
+        ytHostedVideoClients: parseHostedClientList(env.YOUTUBE_HOSTED_VIDEO_CLIENTS),
+        ytHostedAudioClients: parseHostedClientList(env.YOUTUBE_HOSTED_AUDIO_CLIENTS),
+        ytHostedSessionClients: parseHostedClientList(env.YOUTUBE_HOSTED_SESSION_CLIENTS),
+        ytProxyURL: env.YOUTUBE_PROXY_URL ? new URL(env.YOUTUBE_PROXY_URL).toString() : undefined,
+        ytFallbackApiURL: env.YOUTUBE_FALLBACK_API_URL
+            ? new URL(env.YOUTUBE_FALLBACK_API_URL).toString().replace(/\/$/, "")
+            : undefined,
+        ytFallbackAuthHeader: env.YOUTUBE_FALLBACK_AUTH_HEADER?.trim() || undefined,
+        ytFallbackTimeoutMs: (env.YOUTUBE_FALLBACK_TIMEOUT_MS && parseInt(env.YOUTUBE_FALLBACK_TIMEOUT_MS)) || 20_000,
         ytAllowBetterAudio: env.YOUTUBE_ALLOW_BETTER_AUDIO !== "0",
         ytPlayerId: env.YOUTUBE_PLAYER_ID,
         ytGeneratePoTokens: env.YOUTUBE_GENERATE_PO_TOKENS !== "0",
@@ -168,6 +181,30 @@ export const validateEnvs = async (env) => {
         console.error("CUSTOM_INNERTUBE_CLIENT is invalid. Provided client is not supported.");
         console.error(`Supported clients are: ${Constants.SUPPORTED_CLIENTS.join(', ')}\n`);
         throw new Error("Invalid CUSTOM_INNERTUBE_CLIENT");
+    }
+
+    if (env.ytSessionInnertubeClient && !Constants.SUPPORTED_CLIENTS.includes(env.ytSessionInnertubeClient)) {
+        console.error("YOUTUBE_SESSION_INNERTUBE_CLIENT is invalid. Provided client is not supported.");
+        console.error(`Supported clients are: ${Constants.SUPPORTED_CLIENTS.join(', ')}\n`);
+        throw new Error("Invalid YOUTUBE_SESSION_INNERTUBE_CLIENT");
+    }
+
+    validateHostedClientList(env.ytHostedVideoClients, "YOUTUBE_HOSTED_VIDEO_CLIENTS");
+    validateHostedClientList(env.ytHostedAudioClients, "YOUTUBE_HOSTED_AUDIO_CLIENTS");
+    validateHostedClientList(env.ytHostedSessionClients, "YOUTUBE_HOSTED_SESSION_CLIENTS");
+
+    if (env.ytFallbackApiURL) {
+        const fallbackURL = new URL(env.ytFallbackApiURL);
+        if (!["http:", "https:"].includes(fallbackURL.protocol)) {
+            throw new Error("YOUTUBE_FALLBACK_API_URL must use http or https");
+        }
+
+        if (env.apiURL) {
+            const apiOrigin = new URL(env.apiURL).origin;
+            if (fallbackURL.origin === apiOrigin) {
+                throw new Error("YOUTUBE_FALLBACK_API_URL must not point at the current API origin");
+            }
+        }
     }
 
     if (env.forceLocalProcessing && !forceLocalProcessingOptions.includes(env.forceLocalProcessing)) {
@@ -245,6 +282,7 @@ const wrapReload = (contents) => {
             const value = currentEnv[key];
             const isSecret = key.toLowerCase().includes('apikey')
                           || key.toLowerCase().includes('secret')
+                          || key.toLowerCase().includes('proxy')
                           || key === 'httpProxyValues';
 
             if (!value) {

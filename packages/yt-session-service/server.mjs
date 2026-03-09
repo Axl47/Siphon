@@ -3,6 +3,18 @@ import { spawn } from "node:child_process";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
+if (process.env.YT_SESSION_HTTP_PROXY) {
+    process.env.HTTP_PROXY = process.env.YT_SESSION_HTTP_PROXY;
+}
+
+if (process.env.YT_SESSION_HTTPS_PROXY) {
+    process.env.HTTPS_PROXY = process.env.YT_SESSION_HTTPS_PROXY;
+}
+
+if (process.env.YT_SESSION_NO_PROXY) {
+    process.env.NO_PROXY = process.env.YT_SESSION_NO_PROXY;
+}
+
 const bindAddress = process.env.YT_SESSION_BIND || "0.0.0.0";
 const port = Number(process.env.YT_SESSION_PORT || "8080");
 const updateIntervalSeconds = Math.max(300, Number(process.env.YT_SESSION_UPDATE_INTERVAL || "1800"));

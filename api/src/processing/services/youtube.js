@@ -1,12 +1,23 @@
 import HLS from "hls-parser";
 
 import { Innertube, Session, UniversalCache, Platform } from "youtubei.js";
+import { ProxyAgent } from "undici";
 import vm from 'node:vm';
 
 import { env, genericUserAgent } from "../../config.js";
 import { getCookie } from "../cookie/manager.js";
 import { createStream } from "../../stream/manage.js";
 import { ensureYouTubeSession, getYouTubeSession } from "../helpers/youtube-session.js";
+import {
+    classifyYouTubeFailure,
+    formatHostedAttempt,
+    getDefaultHostedClientPools,
+    getHostedAttemptQueue,
+    getNextHostedAttempt,
+    getPlayabilityContext,
+    getPreferredHostedClient,
+    getPreferredSessionClient,
+} from "./youtube-policy.js";
 
 const PLAYER_REFRESH_PERIOD = 1000 * 60 * 15; // ms
 const MINTER_REFRESH_PERIOD = 1000 * 60 * 60 * 6;
@@ -46,12 +57,6 @@ const hlsCodecList = {
 }
 
 const clientsWithNoCipher = ['IOS', 'ANDROID', 'YTSTUDIO_ANDROID', 'YTMUSIC_ANDROID'];
-const clientFallbackOrder = {
-    video: ['ANDROID', 'MWEB', 'TV_EMBEDDED'],
-    audio: ['YTMUSIC_ANDROID', 'ANDROID', 'MWEB'],
-};
-const sessionClientFallbackOrder = ['WEB', 'WEB_EMBEDDED'];
-
 const videoQualities = [144, 240, 360, 480, 720, 1080, 1440, 2160, 4320];
 const youtubeRangeProbeHeaders = {
     'user-agent': genericUserAgent,
@@ -67,97 +72,6 @@ const youtubeRangeProbeWindow = {
 
 let unavailableResponses = 0;
 
-const getRetryTrail = (o, currentClient) => [
-    ...(Array.isArray(o.innertubeClientRetryTrail) ? o.innertubeClientRetryTrail : []),
-    currentClient,
-].filter(Boolean);
-
-const getFallbackInnertubeClient = ({ currentClient, isAudioOnly, retryTrail }) => {
-    const candidates = isAudioOnly ? clientFallbackOrder.audio : clientFallbackOrder.video;
-    const attempted = new Set(retryTrail);
-    return candidates.find(candidate => !attempted.has(candidate) && candidate !== currentClient) || null;
-};
-
-const getPreferredSessionInnertubeClient = (o) => o.sessionInnertubeClient || env.ytSessionInnertubeClient || "WEB";
-
-const getFallbackSessionInnertubeClient = ({ o, currentClient, retryTrail }) => {
-    const attempted = new Set(retryTrail);
-    const preferredClient = getPreferredSessionInnertubeClient(o);
-    const candidates = [
-        preferredClient,
-        ...sessionClientFallbackOrder.filter(candidate => candidate !== preferredClient),
-    ];
-
-    return candidates.find(candidate => !attempted.has(candidate) && candidate !== currentClient) || null;
-};
-
-const retryWithSession = async ({ o, currentClient, reason }) => {
-    if (!env.ytSessionServer || o.forceSessionAttempt || o.youtubeHLS) {
-        return null;
-    }
-
-    const retryTrail = getRetryTrail(o, currentClient);
-    const sessionClient = getFallbackSessionInnertubeClient({
-        o,
-        currentClient,
-        retryTrail,
-    });
-
-    if (!sessionClient) {
-        return null;
-    }
-
-    console.warn(
-        new Date(),
-        `Retrying YouTube request with session-backed ${sessionClient} after ${reason} (previous client: ${currentClient}).`
-    );
-
-    return youtubeService({
-        ...o,
-        forceSessionAttempt: true,
-        sessionInnertubeClient: sessionClient,
-        innertubeClientRetryTrail: retryTrail,
-    });
-};
-
-const retryWithFallbackClient = async ({ o, currentClient, reason }) => {
-    const retryTrail = getRetryTrail(o, currentClient);
-    const fallbackClient = getFallbackInnertubeClient({
-        currentClient,
-        isAudioOnly: !!o.isAudioOnly,
-        retryTrail,
-    });
-
-    if (!fallbackClient) {
-        return null;
-    }
-
-    console.warn(
-        new Date(),
-        `Retrying YouTube request with ${fallbackClient} after ${reason} (previous client: ${currentClient}).`
-    );
-
-    return youtubeService({
-        ...o,
-        forceSessionAttempt: false,
-        innertubeClient: fallbackClient,
-        innertubeClientRetryTrail: retryTrail,
-    });
-};
-
-const getPlayabilityReason = (playability) =>
-    playability?.reason
-    || playability?.error_screen?.subreason?.text
-    || playability?.error_screen?.reason?.text
-    || null;
-
-const getPlayabilityContext = (playability, innertubeClient, retryTrail = []) => ({
-    youtubeStatus: playability?.status || "unknown",
-    youtubeReason: getPlayabilityReason(playability),
-    youtubeClient: innertubeClient,
-    youtubeRetryTrail: retryTrail,
-});
-
 const getInnertubeCacheKey = ({ useSession, sessionTokens, skipYouTubeCookie, hasCookie }) => JSON.stringify({
     mode: useSession ? "session" : "public",
     visitorData: useSession ? sessionTokens?.visitor_data || null : null,
@@ -165,6 +79,55 @@ const getInnertubeCacheKey = ({ useSession, sessionTokens, skipYouTubeCookie, ha
     skipYouTubeCookie,
     hasCookie,
 });
+
+const getHostedClientPools = () => getDefaultHostedClientPools({
+    customInnertubeClient: env.customInnertubeClient,
+    ytSessionInnertubeClient: env.ytSessionInnertubeClient,
+    ytHostedVideoClients: env.ytHostedVideoClients,
+    ytHostedAudioClients: env.ytHostedAudioClients,
+    ytHostedSessionClients: env.ytHostedSessionClients,
+});
+
+const getAttemptTrailWithCurrent = (o, currentAttempt) => [
+    ...(Array.isArray(o.youtubeAttemptTrail) ? o.youtubeAttemptTrail : []),
+    currentAttempt,
+].filter(Boolean);
+
+const getAttemptDispatcher = (o, attempt) => {
+    if (attempt?.transportMode !== "proxy" || !env.ytProxyURL) {
+        return o.dispatcher;
+    }
+
+    return new ProxyAgent(env.ytProxyURL);
+};
+
+const retryWithNextHostedAttempt = async ({ o, currentAttempt, attemptTrail, reason }) => {
+    const pools = getHostedClientPools();
+    const queue = getHostedAttemptQueue({
+        isAudioOnly: !!o.isAudioOnly,
+        pools,
+        proxyURL: env.ytProxyURL,
+    });
+    const nextAttempt = getNextHostedAttempt({
+        queue,
+        currentAttempt,
+    });
+
+    if (!nextAttempt) {
+        return null;
+    }
+
+    console.warn(
+        new Date(),
+        `Retrying YouTube request with ${formatHostedAttempt(nextAttempt)} after ${reason} (previous attempt: ${formatHostedAttempt(currentAttempt)}).`
+    );
+
+    return youtubeService({
+        ...o,
+        youtubeAttempt: nextAttempt,
+        youtubeAttemptTrail: attemptTrail,
+    });
+};
 
 // https://ytjs.dev/guide/getting-started.html#providing-a-custom-javascript-interpreter
 const youtubeEval = async (data, env) => {
@@ -490,14 +453,20 @@ const fetchPost = async (yt, o) => {
 
 export default async function youtubeService(o) {
     const quality = o.quality === "max" ? 9000 : Number(o.quality);
+    const hostedClientPools = getHostedClientPools();
     const transportFetch = (input, init) => fetch(input, {
         ...init,
-        dispatcher: o.dispatcher
+        dispatcher: getAttemptDispatcher(o, currentAttempt)
     });
 
     let useHLS = o.youtubeHLS;
-    const defaultInnertubeClient = o.innertubeClient || env.customInnertubeClient || "IOS";
+    const defaultInnertubeClient = getPreferredHostedClient({
+        isAudioOnly: !!o.isAudioOnly,
+        pools: hostedClientPools,
+        explicitClient: o.innertubeClient,
+    });
     let innertubeClient = defaultInnertubeClient;
+    let useSession = false;
 
     // HLS playlists from the iOS client don't contain the av1 video format.
     if (useHLS && o.codec === "av1") {
@@ -506,35 +475,48 @@ export default async function youtubeService(o) {
 
     if (useHLS) {
         innertubeClient = "IOS";
-    }
-
-    // iOS client doesn't have adaptive formats of resolution >1080p,
-    // so we use the WEB_EMBEDDED client instead for those cases
-    let useSession =
-        env.ytSessionServer && (
-            (
-                !useHLS
-                && innertubeClient === "IOS"
-                && (
-                    (quality > 1080 && o.codec !== "h264")
-                    || (quality > 1080 && o.codec !== "vp9")
+    } else if (o.youtubeAttempt) {
+        useSession = o.youtubeAttempt.sessionMode === "session";
+        innertubeClient = o.youtubeAttempt.client;
+    } else {
+        // iOS client doesn't have adaptive formats of resolution >1080p,
+        // so we keep the older session bootstrap for those cases.
+        useSession =
+            env.ytSessionServer && (
+                (
+                    innertubeClient === "IOS"
+                    && (
+                        (quality > 1080 && o.codec !== "h264")
+                        || (quality > 1080 && o.codec !== "vp9")
+                    )
                 )
-            )
-        );
+            );
 
-    if (o.forceSessionAttempt && env.ytSessionServer && !useHLS) {
-        useSession = true;
+        if (o.forceSessionAttempt && env.ytSessionServer) {
+            useSession = true;
+        }
+
+        // we can get subtitles reliably only from the iOS client
+        // if (o.subtitleLang) {
+        //     innertubeClient = "IOS";
+        //     useSession = false;
+        // }
+
+        if (useSession) {
+            innertubeClient = getPreferredSessionClient({
+                pools: hostedClientPools,
+                explicitClient: o.sessionInnertubeClient,
+            });
+        }
     }
 
-    // we can get subtitles reliably only from the iOS client
-    // if (o.subtitleLang) {
-    //     innertubeClient = "IOS";
-    //     useSession = false;
-    // }
-
-    if (useSession) {
-        innertubeClient = getPreferredSessionInnertubeClient(o);
-    }
+    let currentAttempt = o.youtubeAttempt || {
+        client: innertubeClient,
+        transportMode: "direct",
+        sessionMode: useSession ? "session" : "public",
+    };
+    let attemptDispatcher = getAttemptDispatcher(o, currentAttempt);
+    let attemptTrail = getAttemptTrailWithCurrent(o, currentAttempt);
 
     let yt;
     const createInnertube = (useCurrentSession) =>
@@ -548,12 +530,43 @@ export default async function youtubeService(o) {
         yt = await createInnertube(useSession);
     } catch (e) {
         if (e === "no_session_tokens" && useSession) {
-            // Hosted session tokens are only required for some higher-end YouTube paths.
-            // If the session server is unavailable, fall back to the non-session client so
-            // lower-quality requests and metadata lookups can still proceed.
-            useSession = false;
-            innertubeClient = useHLS ? "IOS" : defaultInnertubeClient;
-            yt = await createInnertube(false);
+            const nextAttempt = await retryWithNextHostedAttempt({
+                o,
+                currentAttempt,
+                attemptTrail,
+                reason: "youtube.no_session_tokens",
+            });
+
+            if (nextAttempt) {
+                return nextAttempt;
+            }
+
+            if (!o.youtubeAttempt) {
+                // Hosted session tokens are only required for some higher-end YouTube paths.
+                // If the session server is unavailable, fall back to the non-session client so
+                // lower-quality requests and metadata lookups can still proceed.
+                useSession = false;
+                innertubeClient = useHLS ? "IOS" : defaultInnertubeClient;
+                currentAttempt = {
+                    client: innertubeClient,
+                    transportMode: "direct",
+                    sessionMode: "public",
+                };
+                attemptDispatcher = getAttemptDispatcher(o, currentAttempt);
+                attemptTrail = getAttemptTrailWithCurrent({
+                    ...o,
+                    youtubeAttemptTrail: Array.isArray(o.youtubeAttemptTrail) ? o.youtubeAttemptTrail : [],
+                }, currentAttempt);
+                yt = await createInnertube(false);
+            } else {
+                return {
+                    error: "youtube.no_session_tokens",
+                    context: {
+                        ...getPlayabilityContext(undefined, attemptTrail, currentAttempt),
+                        youtubeReason: "No session tokens were available for the selected hosted attempt.",
+                    },
+                };
+            }
         } else if (e === "no_session_tokens") {
             return { error: "youtube.no_session_tokens" };
         } else if (e.message?.endsWith("decipher algorithm")) {
@@ -611,135 +624,96 @@ export default async function youtubeService(o) {
             }
         }
 
-        const sessionAttempt = await retryWithSession({
-            o,
-            currentClient: innertubeClient,
-            reason: "fetch.fail",
+        const fetchFailure = classifyYouTubeFailure({
+            fetchError: e,
+            attemptTrail,
+            attempt: currentAttempt,
         });
-        if (sessionAttempt) {
-            return sessionAttempt;
-        }
-
-        const fallbackClientAttempt = await retryWithFallbackClient({
+        const retryAttempt = await retryWithNextHostedAttempt({
             o,
-            currentClient: innertubeClient,
-            reason: "fetch.fail",
+            currentAttempt,
+            attemptTrail,
+            reason: fetchFailure.retryReason || fetchFailure.error,
         });
-        if (fallbackClientAttempt) {
-            return fallbackClientAttempt;
+        if (retryAttempt) {
+            return retryAttempt;
         }
 
-        if (e?.info) {
-            let errorInfo;
-            try { errorInfo = JSON.parse(e?.info); } catch {}
-
-            if (errorInfo?.reason === "This video is private") {
-                return { error: "content.video.private" };
-            }
-            if (["INVALID_ARGUMENT", "UNAUTHENTICATED"].includes(errorInfo?.error?.status)) {
-                return { error: "youtube.api_error" };
-            }
-        }
-
-        if (e?.message === "This video is unavailable") {
-            return { error: "content.video.unavailable" };
-        }
-
-        return { error: "fetch.fail" };
+        return {
+            error: fetchFailure.error,
+            context: fetchFailure.context,
+        };
     }
 
-    if (!info) return { error: "fetch.fail" };
+    if (!info) {
+        const emptyInfoFailure = classifyYouTubeFailure({
+            fetchError: new Error("No /player response body was returned."),
+            attemptTrail,
+            attempt: currentAttempt,
+        });
+        const retryAttempt = await retryWithNextHostedAttempt({
+            o,
+            currentAttempt,
+            attemptTrail,
+            reason: emptyInfoFailure.retryReason || emptyInfoFailure.error,
+        });
+
+        if (retryAttempt) {
+            return retryAttempt;
+        }
+
+        return {
+            error: emptyInfoFailure.error,
+            context: emptyInfoFailure.context,
+        };
+    }
 
     const playability = info.playability_status;
     const basicInfo = info.video_details;
-    const retryTrail = getRetryTrail(o, innertubeClient);
+    const playabilityFailure = classifyYouTubeFailure({
+        playability,
+        attemptTrail,
+        attempt: currentAttempt,
+    });
 
-    switch (playability.status) {
-        case "LOGIN_REQUIRED":
-            if (playability.reason.endsWith("bot")) {
-                const sessionAttempt = await retryWithSession({
-                    o,
-                    currentClient: innertubeClient,
-                    reason: "youtube.login",
-                });
-                if (sessionAttempt) {
-                    return sessionAttempt;
-                }
+    if (playabilityFailure.error) {
+        const retryAttempt = await retryWithNextHostedAttempt({
+            o,
+            currentAttempt,
+            attemptTrail,
+            reason: playabilityFailure.retryReason || playabilityFailure.error,
+        });
 
-                const fallbackClientAttempt = await retryWithFallbackClient({
-                    o,
-                    currentClient: innertubeClient,
-                    reason: "youtube.login",
-                });
-                if (fallbackClientAttempt) {
-                    return fallbackClientAttempt;
-                }
-                lastRefreshedAt = +new Date(0);
-                return {
-                    error: "youtube.login",
-                    retry: true,
-                    context: getPlayabilityContext(playability, innertubeClient, retryTrail),
-                }
-            }
-            if (playability.reason.endsWith("age") || playability.reason.endsWith("inappropriate for some users.")) {
-                return { error: "content.video.age" }
-            }
-            if (playability?.error_screen?.reason?.text === "Private video") {
-                return { error: "content.video.private" }
-            }
-            break;
-
-        case "UNPLAYABLE":
-            if (playability?.reason?.endsWith("request limit.")) {
-                return { error: "fetch.rate" }
-            }
-            if (playability?.reason?.endsWith("bot")) {
-                const sessionAttempt = await retryWithSession({
-                    o,
-                    currentClient: innertubeClient,
-                    reason: "youtube.login",
-                });
-                if (sessionAttempt) {
-                    return sessionAttempt;
-                }
-
-                const fallbackClientAttempt = await retryWithFallbackClient({
-                    o,
-                    currentClient: innertubeClient,
-                    reason: "youtube.login",
-                });
-                if (fallbackClientAttempt) {
-                    return fallbackClientAttempt;
-                }
-                lastRefreshedAt = +new Date(0);
-                return {
-                    error: "youtube.login",
-                    retry: true,
-                    context: getPlayabilityContext(playability, innertubeClient, retryTrail),
-                }
-            }
-            if (playability?.error_screen?.subreason?.text?.endsWith("in your country")) {
-                return { error: "content.video.region" }
-            }
-            if (playability?.error_screen?.reason?.text === "Private video") {
-                return { error: "content.video.private" }
-            }
-            break;
-
-        case "AGE_VERIFICATION_REQUIRED":
-            return { error: "content.video.age" };
-    }
-
-    if (playability.status !== "OK") {
-        const context = getPlayabilityContext(playability, innertubeClient, retryTrail);
-        console.warn(new Date(), `YouTube playability failure for ${o.id || o.postId || "unknown target"}: ${JSON.stringify(context)}`);
-        // Force refresh player once we get 10 unavailable videos
-        unavailableResponses ??= 0;
-        if (unavailableResponses++ > 10) {
-            lastRefreshedAt = +new Date(0);
-            unavailableResponses = 0;
+        if (retryAttempt) {
+            return retryAttempt;
         }
-        return { error: "content.video.unavailable", context };
+
+        const context = playabilityFailure.context;
+        console.warn(new Date(), `YouTube playability failure for ${o.id || o.postId || "unknown target"}: ${JSON.stringify(context)}`);
+
+        if (playabilityFailure.refreshPlayerOnExhaustion) {
+            lastRefreshedAt = +new Date(0);
+        } else if (playability.status !== "OK") {
+            // Force refresh player once we get 10 unavailable videos
+            unavailableResponses ??= 0;
+            if (unavailableResponses++ > 10) {
+                lastRefreshedAt = +new Date(0);
+                unavailableResponses = 0;
+            }
+        }
+
+        if (playabilityFailure.error === "youtube.login") {
+            return {
+                error: playabilityFailure.error,
+                retry: true,
+                context,
+            };
+        }
+
+        return {
+            error: playabilityFailure.error,
+            context,
+        };
     }
 
     if (basicInfo.is_live) {
@@ -770,7 +744,7 @@ export default async function youtubeService(o) {
     if (useHLS) {
         const variants = await getHlsVariants(
             info.streaming_data.hls_manifest_url,
-            o.dispatcher
+            attemptDispatcher
         );
 
         if (variants?.error) return variants;
@@ -926,7 +900,7 @@ export default async function youtubeService(o) {
         }
 
         if (o.subtitleLang && !o.isAudioOnly && info.captions?.caption_tracks?.length) {
-            const videoSubtitles = await getSubtitles(info, o.dispatcher, o.subtitleLang);
+            const videoSubtitles = await getSubtitles(info, attemptDispatcher, o.subtitleLang);
             if (videoSubtitles) {
                 subtitles = videoSubtitles;
             }
@@ -975,7 +949,9 @@ export default async function youtubeService(o) {
         ...o,
         dispatcher: undefined,
         itag,
-        innertubeClient
+        innertubeClient,
+        youtubeAttempt: currentAttempt,
+        youtubeAttemptTrail: Array.isArray(o.youtubeAttemptTrail) ? o.youtubeAttemptTrail : [],
     };
 
     if (audio && o.isAudioOnly) {
@@ -993,7 +969,7 @@ export default async function youtubeService(o) {
         }
 
         let cover = `https://i.ytimg.com/vi/${o.id}/maxresdefault.jpg`;
-        const testMaxCover = await fetch(cover, { dispatcher: o.dispatcher })
+        const testMaxCover = await fetch(cover, { dispatcher: attemptDispatcher })
             .then(r => r.status === 200)
             .catch(() => {});
 
@@ -1005,7 +981,7 @@ export default async function youtubeService(o) {
             const fallbackToHLS = await shouldFallbackToHLS({
                 audioUrl: urls,
                 audioLength: directAudioLength,
-                dispatcher: o.dispatcher,
+                dispatcher: attemptDispatcher,
             });
 
             if (fallbackToHLS) {
@@ -1031,6 +1007,8 @@ export default async function youtubeService(o) {
             bestAudio,
             isHLS: useHLS,
             originalRequest,
+            proxyToUse: currentAttempt.transportMode === "proxy" ? env.ytProxyURL : undefined,
+            requestIP: o.requestIP,
 
             cover,
             cropCover: basicInfo.author.endsWith("- Topic"),
@@ -1076,7 +1054,7 @@ export default async function youtubeService(o) {
                 videoLength: directVideoLength,
                 audioUrl: audio,
                 audioLength: directAudioLength,
-                dispatcher: o.dispatcher,
+                dispatcher: attemptDispatcher,
             });
 
             if (fallbackToHLS) {
@@ -1103,7 +1081,9 @@ export default async function youtubeService(o) {
             filenameAttributes,
             fileMetadata,
             isHLS: useHLS,
-            originalRequest
+            originalRequest,
+            proxyToUse: currentAttempt.transportMode === "proxy" ? env.ytProxyURL : undefined,
+            requestIP: o.requestIP,
         }
     }
 
