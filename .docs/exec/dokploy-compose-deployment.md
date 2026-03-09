@@ -23,6 +23,7 @@ After this change, Siphon can be deployed to Dokploy as a single Docker Compose 
 - [x] (2026-03-09 16:50Z) Replaced the Chromium-based `yt-session-generator` wrapper with a browserless Node workspace package (`packages/yt-session-service`) that generates `{ visitorData, poToken }` directly and exposes `/token`, `/update`, and `/health`.
 - [x] (2026-03-09 18:50Z) Hardened the browserless helper startup by launching the token worker with an explicit `--max-old-space-size` argv, switching readiness to `/token`, and adding a request-time API fetch path so hosted YouTube recovers as soon as the helper produces its first token.
 - [x] (2026-03-09 19:25Z) Fixed the YouTube session-backed retry path to rebuild the cached Innertube context when switching from public IOS requests to session-backed WEB_EMBEDDED requests, instead of reusing stale visitor/client state.
+- [x] (2026-03-09 19:45Z) Taught the session-backed WEB_EMBEDDED path to fetch `encryptedHostFlags` lazily before `/player` requests, matching the requirement the code already knew about for the older public WEB_EMBEDDED flow.
 - [ ] Run full `docker compose build` / `docker compose up` validation once Docker is available on the host. Completed: `docker compose config`; remaining: actual image build and container launch through Docker.
 
 ## Surprises & Discoveries
@@ -62,6 +63,9 @@ After this change, Siphon can be deployed to Dokploy as a single Docker Compose 
 
 - Observation: a valid helper token was not sufficient on its own, because the YouTube service could still reuse a process-cached non-session IOS Innertube instance when attempting a later session-backed WEB_EMBEDDED retry.
   Evidence: API logs showed `[✓] poToken & visitor_data loaded successfully!` followed by `Retrying YouTube request with session-backed WEB_EMBEDDED...` and then `This video is unavailable`; the cached clone path was reusing the original base context until a cache-key-aware rebuild was introduced.
+
+- Observation: the code already knew WEB_EMBEDDED sometimes needed `encryptedHostFlags`, but it only fetched those flags for the older non-session WEB_EMBEDDED path.
+  Evidence: `api/src/processing/services/youtube.js` only populated `encryptedHostFlags` behind `!useSession && env.customInnertubeClient === "WEB_EMBEDDED"` even though later `/player` requests also attach that field for session-backed WEB_EMBEDDED requests when available.
 
 ## Decision Log
 

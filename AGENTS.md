@@ -68,6 +68,8 @@ Whenever new updates are made, this file (`AGENTS.md`) should be updated with an
 
 - `api/src/processing/services/youtube.js` now tracks an Innertube cache key that includes session mode, `visitor_data`, `poToken`, and YouTube-cookie usage. Without that, a later session-backed WEB_EMBEDDED retry can accidentally reuse an earlier IOS-shaped Innertube context and surface misleading `This video is unavailable` errors even though the helper token itself is valid.
 
+- `api/src/processing/services/youtube.js` also lazily fetches `encryptedHostFlags` for session-backed `WEB_EMBEDDED` requests, not just the older public WEB_EMBEDDED path. If hosted YouTube failures still mention `WEB_EMBEDDED`, inspect that helper before changing more session envs.
+
 - Public YouTube requests can behave worse on VPS IPs when browser-exported YouTube cookies are enabled. The service now retries `/player` once without YouTube cookies after a `fetch.fail`, so public videos can still work even if mounted cookies are too “hot” for the datacenter IP.
 
 - For hosted YouTube failures that still return `youtube.login` or `fetch.fail`, the YouTube service now retries with alternate Innertube clients (`ANDROID`, `MWEB`, `TV_EMBEDDED`, and `YTMUSIC_ANDROID` for audio-first cases) before surfacing the final API error. This makes the retry loop materially different instead of replaying the same `IOS` client request.

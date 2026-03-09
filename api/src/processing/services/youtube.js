@@ -463,6 +463,10 @@ const fetchPost = async (yt, o) => {
 
 export default async function youtubeService(o) {
     const quality = o.quality === "max" ? 9000 : Number(o.quality);
+    const transportFetch = (input, init) => fetch(input, {
+        ...init,
+        dispatcher: o.dispatcher
+    });
 
     let useHLS = o.youtubeHLS;
     const defaultInnertubeClient = o.innertubeClient || env.customInnertubeClient || "IOS";
@@ -508,10 +512,7 @@ export default async function youtubeService(o) {
     let yt;
     const createInnertube = (useCurrentSession) =>
         cloneInnertube(
-            (input, init) => fetch(input, {
-                ...init,
-                dispatcher: o.dispatcher
-            }),
+            transportFetch,
             useCurrentSession,
             o.skipYouTubeCookie === true
         );
@@ -554,6 +555,10 @@ export default async function youtubeService(o) {
                 }
             }
         };
+
+        if (innertubeClient === "WEB_EMBEDDED" && !encryptedHostFlags) {
+            await fetchEncryptedHostFlags(transportFetch);
+        }
 
         if (innertubeClient === "WEB_EMBEDDED" && encryptedHostFlags) {
             args.playbackContext.contentPlaybackContext.encryptedHostFlags = encryptedHostFlags;
